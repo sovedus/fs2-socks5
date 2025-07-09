@@ -42,9 +42,13 @@ final class UserPasswordAuthenticator[F[_]: Async](
     _ <- F
       .raiseError(AuthenticationException(s"Unsupported auth version: $version"))
       .whenA(version != AUTH_VERSION)
-    user <- socket.readN(usernameLen).map(c => new String(c.toArray, StandardCharsets.UTF_8))
+    user <- socket
+      .readN(usernameLen.toInt)
+      .map(c => new String(c.toArray, StandardCharsets.UTF_8))
     passLen <- socket.readN(1).map(_(0))
-    password <- socket.readN(passLen).map(c => new String(c.toArray, StandardCharsets.UTF_8))
+    password <- socket
+      .readN(passLen.toInt)
+      .map(c => new String(c.toArray, StandardCharsets.UTF_8))
     authStatus <- credentialStore
       .validate(UserPasswordCredential(user, password))
       .ifF(AuthenticationStatus.SUCCESS, AuthenticationStatus.FAILURE)

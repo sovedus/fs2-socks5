@@ -22,7 +22,7 @@ import com.github.sovedus.socks5.common.{Command, Resolver}
 import com.github.sovedus.socks5.server.auth.ServerAuthenticator
 import fs2.io.net.Network
 
-class Socks5ServerBuilder[F[_]: Async: Network] private (
+final class Socks5ServerBuilder[F[_]: Async: Network] private (
     val host: Host,
     val port: Port,
     val limitConnections: Int,

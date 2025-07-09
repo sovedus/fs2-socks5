@@ -25,7 +25,7 @@ import com.github.sovedus.socks5.common.{Command, Resolver}
 import com.github.sovedus.socks5.server.auth.ServerAuthenticator
 import fs2.io.net.Network
 
-case class Socks5Server[F[_]: Async] private (
+case class Socks5Server[F[_]] private (
     host: Host,
     port: Port,
     limitConnections: Int,
