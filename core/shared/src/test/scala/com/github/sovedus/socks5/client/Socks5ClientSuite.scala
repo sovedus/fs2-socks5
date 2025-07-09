@@ -202,7 +202,7 @@ class Socks5ClientSuite extends CatsEffectSuite {
     val replyName = cmdReply.getClass.getSimpleName.replace("$", "")
 
     test(
-      s"CONNECT command should throw HandleCommandException when server return $replyName($code) code".only) {
+      s"CONNECT command should throw HandleCommandException when server return $replyName($code) code") {
       val handshakeReq = List[Byte](5, 1, 0)
       val handshakeResp = Chunk[Byte](5, 0)
 
