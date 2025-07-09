@@ -1,8 +1,24 @@
+/*
+ * Copyright 2025 Sovedus
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.github.sovedus.socks5.common
 
 import cats.effect.Sync
-import cats.syntax.all._
-import com.comcast.ip4s._
+import cats.syntax.all.*
+import com.comcast.ip4s.*
 import com.github.sovedus.socks5.common.Socks5Constants.{IPv4_LEN, IPv6_LEN}
 import com.github.sovedus.socks5.common.Socks5Exception.{
   HandleCommandException,
@@ -41,26 +57,26 @@ abstract class Socks5AddressHelper[F[_]: Sync] {
 
   private def parseIPv4(): F[IpAddress] = socket
     .readN(IPv4_LEN)
-    .map(chunk => Ipv4Address.fromBytes(chunk(0), chunk(1), chunk(2), chunk(3)))
+    .map(chunk => Ipv4Address.fromBytes(chunk(0).toInt, chunk(1).toInt, chunk(2).toInt, chunk(3).toInt))
 
   private def parseIPv6(): F[IpAddress] = socket.readN(IPv6_LEN).map { chunk =>
     Ipv6Address.fromBytes(
-      chunk(0),
-      chunk(1),
-      chunk(2),
-      chunk(3),
-      chunk(4),
-      chunk(5),
-      chunk(6),
-      chunk(7),
-      chunk(8),
-      chunk(9),
-      chunk(10),
-      chunk(11),
-      chunk(12),
-      chunk(13),
-      chunk(14),
-      chunk(15)
+      chunk(0).toInt,
+      chunk(1).toInt,
+      chunk(2).toInt,
+      chunk(3).toInt,
+      chunk(4).toInt,
+      chunk(5).toInt,
+      chunk(6).toInt,
+      chunk(7).toInt,
+      chunk(8).toInt,
+      chunk(9).toInt,
+      chunk(10).toInt,
+      chunk(11).toInt,
+      chunk(12).toInt,
+      chunk(13).toInt,
+      chunk(14).toInt,
+      chunk(15).toInt
     )
   }
 
