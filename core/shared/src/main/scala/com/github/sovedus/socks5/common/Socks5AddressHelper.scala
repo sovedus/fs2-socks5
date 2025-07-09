@@ -57,7 +57,8 @@ abstract class Socks5AddressHelper[F[_]: Sync] {
 
   private def parseIPv4(): F[IpAddress] = socket
     .readN(IPv4_LEN)
-    .map(chunk => Ipv4Address.fromBytes(chunk(0).toInt, chunk(1).toInt, chunk(2).toInt, chunk(3).toInt))
+    .map(chunk =>
+      Ipv4Address.fromBytes(chunk(0).toInt, chunk(1).toInt, chunk(2).toInt, chunk(3).toInt))
 
   private def parseIPv6(): F[IpAddress] = socket.readN(IPv6_LEN).map { chunk =>
     Ipv6Address.fromBytes(
