@@ -1,5 +1,3 @@
-
-
 ThisBuild / tlBaseVersion := "0.1"
 
 ThisBuild / organization := "com.github.sovedus"
@@ -16,6 +14,8 @@ val Scala3 = "3.3.5"
 ThisBuild / crossScalaVersions := Seq(Scala213, Scala3)
 ThisBuild / scalaVersion := Scala213
 
+addCommandAlias("scalafmtFull", "scalafmtAll;scalafmtSbt")
+
 lazy val noPublishSettings = Seq(
   publishArtifact := false,
   packagedArtifacts := Map.empty,
@@ -24,11 +24,8 @@ lazy val noPublishSettings = Seq(
   publishLocal := {}
 )
 
-
-lazy val root = project
-  .in(file("."))
-  .aggregate(core.jvm, core.native)
-  .enablePlugins(NoPublishPlugin)
+lazy val root =
+  project.in(file(".")).aggregate(core.jvm, core.native).enablePlugins(NoPublishPlugin)
 
 lazy val core = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Full)
