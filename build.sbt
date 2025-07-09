@@ -1,11 +1,20 @@
-val Scala213 = "2.13.16"
-val Scala3 = "3.3.5"
 
+
+ThisBuild / tlBaseVersion := "0.1"
 
 ThisBuild / organization := "com.github.sovedus"
-ThisBuild / version := "0.1.0"
+ThisBuild / organizationName := "Sovedus"
+ThisBuild / startYear := Some(2025)
+ThisBuild / licenses := Seq(License.Apache2)
+ThisBuild / developers := List(
+  tlGitHubDev("sovedus", "")
+)
+ThisBuild / tlCiReleaseBranches := Seq("master")
+
+val Scala213 = "2.13.16"
+val Scala3 = "3.3.5"
 ThisBuild / crossScalaVersions := Seq(Scala213, Scala3)
-ThisBuild / scalaVersion := Scala213
+ThisBuild / scalaVersion := Scala213 // the default Scala
 
 lazy val noPublishSettings = Seq(
   publishArtifact := false,
@@ -19,10 +28,7 @@ lazy val noPublishSettings = Seq(
 lazy val root = project
   .in(file("."))
   .aggregate(core.jvm, core.native)
-  .settings(
-    crossScalaVersions := Nil
-  )
-  .settings(noPublishSettings)
+  .enablePlugins(NoPublishPlugin)
 
 lazy val core = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Full)
