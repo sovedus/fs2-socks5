@@ -1,6 +1,6 @@
 ThisBuild / tlBaseVersion := "0.1"
 
-ThisBuild / organization := "com.github.sovedus"
+ThisBuild / organization := "io.github.sovedus"
 ThisBuild / organizationName := "Sovedus"
 ThisBuild / startYear := Some(2025)
 ThisBuild / licenses := Seq(License.Apache2)
