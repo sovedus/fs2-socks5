@@ -7,7 +7,7 @@ import io.github.sovedus.socks5.client.Socks5ClientBuilder
 
 import scala.concurrent.duration.DurationInt
 
-object Client extends IOApp.Simple {
+object ClientConnect extends IOApp.Simple {
 
   override def run: IO[Unit] = {
 
@@ -15,7 +15,7 @@ object Client extends IOApp.Simple {
     val client = Socks5ClientBuilder
       .default[IO]
       .withHost(host"localhost")
-      .withPort(port"8118")
+      .withPort(port"1080")
       .withResolveHostOnServer
       .build
 
