@@ -24,8 +24,11 @@ lazy val noPublishSettings = Seq(
   publishLocal := {}
 )
 
-lazy val root =
-  project.in(file(".")).aggregate(core.jvm, core.native).enablePlugins(NoPublishPlugin)
+lazy val root = project
+  .in(file("."))
+  .aggregate(core.jvm, core.native)
+  .settings(name := "fs2-socks5")
+  .enablePlugins(NoPublishPlugin)
 
 lazy val core = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Full)
@@ -38,3 +41,10 @@ lazy val core = crossProject(JVMPlatform, NativePlatform)
     ),
     Test / testOptions += Tests.Argument("+l")
   )
+
+lazy val example = project
+  .dependsOn(core.jvm, core.native)
+  .settings(
+    Compile / run / fork := true
+  )
+  .enablePlugins(NoPublishPlugin)
