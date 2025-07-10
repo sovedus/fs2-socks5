@@ -25,12 +25,12 @@ import fs2.io.net.Network
 import io.github.sovedus.socks5.common.{Command, Resolver}
 import io.github.sovedus.socks5.server.auth.ServerAuthenticator
 
-case class Socks5Server[F[_]] private (
-    host: Host,
-    port: Port,
-    limitConnections: Int,
-    errorHandler: ErrorHandler[F],
-    commands: Map[Command, Socks5ServerCommandHandler[F]]
+class Socks5Server[F[_]] private (
+    val host: Host,
+    val port: Port,
+    val limitConnections: Int,
+    private val errorHandler: ErrorHandler[F],
+    private val commands: Map[Command, Socks5ServerCommandHandler[F]]
 )
 
 object Socks5Server {
@@ -62,7 +62,7 @@ object Socks5Server {
         .compile
         .drain
         .background
-    } yield Socks5Server(
+    } yield new Socks5Server(
       serverAddress.host,
       serverAddress.port,
       limitConnections,
