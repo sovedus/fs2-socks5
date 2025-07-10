@@ -28,9 +28,7 @@ import io.github.sovedus.socks5.server.auth.ServerAuthenticator
 class Socks5Server[F[_]] private (
     val host: Host,
     val port: Port,
-    val limitConnections: Int,
-    private val errorHandler: ErrorHandler[F],
-    private val commands: Map[Command, Socks5ServerCommandHandler[F]]
+    val limitConnections: Int
 )
 
 object Socks5Server {
@@ -65,8 +63,7 @@ object Socks5Server {
     } yield new Socks5Server(
       serverAddress.host,
       serverAddress.port,
-      limitConnections,
-      errorHandler: ErrorHandler[F],
-      commands)
+      limitConnections
+    )
 
 }

@@ -62,7 +62,7 @@ object UserPasswordAuthenticator {
     new UserPasswordAuthenticator(makeAuthData(userBytes, passwordBytes))
   }
 
-  private def makeAuthData[F[_]: Async](
+  private def makeAuthData(
       userBytes: Array[Byte],
       passwordBytes: Array[Byte]
   ): Chunk[Byte] = {
