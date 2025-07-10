@@ -50,24 +50,22 @@ class UserPasswordAuthenticator[F[_]: Async](authData: Chunk[Byte])
 object UserPasswordAuthenticator {
   private val AUTH_VERSION: Byte = 0x01
 
-  def apply[F[_]: Async](user: String, password: String): F[UserPasswordAuthenticator[F]] =
-    Async[F].defer {
-      val userBytes = user.getBytes
-      val passwordBytes = password.getBytes
+  def apply[F[_]: Async](user: String, password: String): UserPasswordAuthenticator[F] = {
+    val userBytes = user.getBytes
+    val passwordBytes = password.getBytes
 
-      if (userBytes.length < 1) { throw new Exception("Username cannot be empty") }
-      else if (userBytes.length > 255) { throw new Exception("Username is too long") }
-      else if (passwordBytes.length < 1) { throw new Exception("Password cannot be empty") }
-      else if (passwordBytes.length > 255) { throw new Exception("Password is too long") }
+    if (userBytes.length < 1) { throw new Exception("Username cannot be empty") }
+    else if (userBytes.length > 255) { throw new Exception("Username is too long") }
+    else if (passwordBytes.length < 1) { throw new Exception("Password cannot be empty") }
+    else if (passwordBytes.length > 255) { throw new Exception("Password is too long") }
 
-      makeAuthData(userBytes, passwordBytes).map(new UserPasswordAuthenticator(_))
-
-    }
+    new UserPasswordAuthenticator(makeAuthData(userBytes, passwordBytes))
+  }
 
   private def makeAuthData[F[_]: Async](
       userBytes: Array[Byte],
       passwordBytes: Array[Byte]
-  ): F[Chunk[Byte]] = Async[F].delay {
+  ): Chunk[Byte] = {
     val buf = new ArrayBuffer[Byte](3 + userBytes.length + passwordBytes.length)
 
     buf.addOne(AUTH_VERSION)

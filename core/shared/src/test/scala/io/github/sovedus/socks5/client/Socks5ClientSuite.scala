@@ -102,14 +102,16 @@ class Socks5ClientSuite extends CatsEffectSuite {
 
     Network[IO].serverResource(host"127.0.0.1".some).use {
       case (serverAddress, serverStream) =>
+        val userPassAuthenticator = UserPasswordAuthenticator[IO](user, pass)
+
+        val client = Socks5ClientBuilder
+          .default[IO]
+          .withHost(serverAddress.host)
+          .withPort(serverAddress.port)
+          .withAuthenticator(userPassAuthenticator)
+          .build
+
         for {
-          userPassAuthenticator <- UserPasswordAuthenticator[IO](user, pass)
-          client = Socks5ClientBuilder
-            .default[IO]
-            .withHost(serverAddress.host)
-            .withPort(serverAddress.port)
-            .withAuthenticator(userPassAuthenticator)
-            .build
           clientFiber <- fs2
             .Stream
             .emit(Chunk.from(testDataReq))
