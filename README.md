@@ -13,7 +13,7 @@ This library provides SOCKS5 client and server implementations.
 
 #### Commands support:
 - [x] `CONNECT`
-- [ ] `BIND` (WIP)
+- [ ] `BIND`
 - [ ] `UDP_ASSOCIATE` (wait native UPD support in fs2-io)
 
 
