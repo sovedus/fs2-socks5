@@ -66,7 +66,7 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
 
 object Socks5ClientBuilder {
 
-  def default[F[_]: Async: Network] = new Socks5ClientBuilder(
+  def default[F[_]: Async: Network]: Socks5ClientBuilder[F] = new Socks5ClientBuilder(
     host = host"localhost",
     port = port"1080",
     resolveHostOnServer = true,

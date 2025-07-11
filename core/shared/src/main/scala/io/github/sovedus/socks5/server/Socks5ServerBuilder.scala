@@ -81,7 +81,7 @@ final class Socks5ServerBuilder[F[_]: Async: Network] private (
 
 object Socks5ServerBuilder {
 
-  def default[F[_]: Async: Network] = new Socks5ServerBuilder(
+  def default[F[_]: Async: Network]: Socks5ServerBuilder[F] = new Socks5ServerBuilder(
     host = host"localhost",
     port = port"1080",
     limitConnections = Int.MaxValue,
