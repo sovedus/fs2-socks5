@@ -18,7 +18,7 @@ package io.github.sovedus.socks5.server
 
 import com.comcast.ip4s.{IpAddress, Port}
 
-private[server] trait Socks5ServerCommandHandler[F[_]] {
+trait Socks5ServerCommandHandler[F[_]] {
 
   /** @param ipAddress
     *   received from client
