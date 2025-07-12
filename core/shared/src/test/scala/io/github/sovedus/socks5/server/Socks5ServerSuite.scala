@@ -16,7 +16,7 @@
 
 package io.github.sovedus.socks5.server
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import com.comcast.ip4s.*
 import fs2.{Chunk, Pipe}
 import fs2.io.net.Network
@@ -83,14 +83,13 @@ class Socks5ServerSuite extends CatsEffectSuite {
 
   private def commandHandler(sendData: List[Byte]): Socks5ServerCommandHandler[IO] =
     new Socks5ServerCommandHandler[IO] {
-      override def handle(ipAddress: IpAddress, port: Port)(
-          onConnectionSuccess: IO[Unit]
-      ): Pipe[IO, Byte, Byte] = { in =>
-        fs2
-          .Stream
-          .eval(onConnectionSuccess)
-          .flatMap(_ => fs2.Stream.emits(sendData).concurrently(in.delete(_ => true)))
-      }
+      override def handle(
+          targetIp: IpAddress,
+          targetPort: Port
+      ): Resource[IO, Pipe[IO, Byte, Byte]] =
+        Resource
+          .pure(fs2.Stream.emits(sendData).covary[IO])
+          .map(stream => in => stream.concurrently(in.delete(_ => true)))
     }
 
 }

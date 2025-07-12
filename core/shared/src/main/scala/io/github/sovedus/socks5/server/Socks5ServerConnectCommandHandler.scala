@@ -16,21 +16,19 @@
 
 package io.github.sovedus.socks5.server
 
-import cats.effect.Async
+import cats.effect.{Async, Resource}
 import com.comcast.ip4s.{IpAddress, Port, SocketAddress}
 import fs2.io.net.Network
 
 private[server] class Socks5ServerConnectCommandHandler[F[_]: Async: Network]
     extends Socks5ServerCommandHandler[F] {
 
-  override def handle(ipAddress: IpAddress, port: Port)(
-      onConnectionSuccess: F[Unit]
-  ): fs2.Pipe[F, Byte, Byte] = { in =>
-    fs2
-      .Stream
-      .resource(Network[F].client(SocketAddress(ipAddress, port)))
-      .evalTap(_ => onConnectionSuccess)
-      .flatMap(dstSocket => dstSocket.reads.concurrently(in.through(dstSocket.writes)))
-  }
+  override def handle(
+      targetIp: IpAddress,
+      targetPort: Port
+  ): Resource[F, fs2.Pipe[F, Byte, Byte]] =
+    Network[F].client(SocketAddress(targetIp, targetPort)).map { socket => in =>
+      socket.reads.concurrently(in.through(socket.writes))
+    }
 
 }

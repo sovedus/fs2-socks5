@@ -16,20 +16,22 @@
 
 package io.github.sovedus.socks5.server
 
+import cats.effect.Resource
 import com.comcast.ip4s.{IpAddress, Port}
 
 trait Socks5ServerCommandHandler[F[_]] {
 
-  /** @param ipAddress
-    *   received from client
-    * @param port
-    *   received from client
-    * @param onConnectionSuccess
-    *   must be call after success connection
+  /** The implementation must create a resource (e.g. http client) with [[fs2.Pipe]]. The input
+    * stream contains the data from the client that should be sent to `targetIp`:`targetPort`.
+    * The output stream is the data received from the receiver and will be forwarded to the
+    * client.
+    *
+    * @param targetIp
+    *   Request destination address
+    * @param targetPort
+    *   Request destination port
     * @return
-    *   pipe with input data from client and output data from destination
+    *   Resource with pipe with input data from client and output data from destination
     */
-  def handle(ipAddress: IpAddress, port: Port)(
-      onConnectionSuccess: F[Unit]
-  ): fs2.Pipe[F, Byte, Byte]
+  def handle(targetIp: IpAddress, targetPort: Port): Resource[F, fs2.Pipe[F, Byte, Byte]]
 }

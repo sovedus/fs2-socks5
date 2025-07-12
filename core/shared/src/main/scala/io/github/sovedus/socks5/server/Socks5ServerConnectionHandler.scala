@@ -74,26 +74,31 @@ private[server] class Socks5ServerConnectionHandler[F[_]: Sync](
 
   private def handleCommand(): F[Unit] = parseCommand()
     .flatMap { req =>
-      val transferPipe = commands
+      commands
         .getOrElse(req.command, throw UnsupportedCommandException(req.command))
-        .handle(req.address, req.port) {
-          CommandReply(CommandReplyType.SUCCEEDED, req.address, req.port).send(socket)
+        .handle(req.address, req.port)
+        .evalTap(_ =>
+          CommandReply(CommandReplyType.SUCCEEDED, req.address, req.port).send(socket))
+        .use { transferPipe =>
+          socket.reads.through(transferPipe).through(socket.writes).compile.drain
         }
-
-      socket.reads.through(transferPipe).through(socket.writes).compile.drain
     }
     .attemptT
-    .leftSemiflatTap {
-      case _: UnknownHostException =>
-        CommandReply(CommandReplyType.HOST_UNREACHABLE, IPv4_ZERO, PORT_ZERO).send(socket)
-      case _: ConnectException =>
-        CommandReply(CommandReplyType.CONNECTION_REFUSED, IPv4_ZERO, PORT_ZERO).send(socket)
-      case _: ProtocolVersionException =>
-        CommandReply(CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE, IPv4_ZERO, PORT_ZERO).send(
-          socket)
-      case _ =>
-        CommandReply(CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE, IPv4_ZERO, PORT_ZERO).send(
-          socket)
+    .leftSemiflatTap { ex =>
+      val cmdReply = ex match {
+        case _: UnknownHostException =>
+          CommandReply(CommandReplyType.HOST_UNREACHABLE, IPv4_ZERO, PORT_ZERO)
+        case _: ConnectException =>
+          CommandReply(CommandReplyType.CONNECTION_REFUSED, IPv4_ZERO, PORT_ZERO)
+        case _: ProtocolVersionException =>
+          CommandReply(CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE, IPv4_ZERO, PORT_ZERO)
+        case _: UnsupportedCommandException =>
+          CommandReply(CommandReplyType.COMMAND_NOT_SUPPORTED, IPv4_ZERO, PORT_ZERO)
+        case _ =>
+          CommandReply(CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE, IPv4_ZERO, PORT_ZERO)
+      }
+
+      cmdReply.send(socket)
     }
     .rethrowT
 
