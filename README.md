@@ -12,7 +12,7 @@ This library provides SOCKS5 client and server implementations.
 ## Getting Started
 
 ```scala
-libraryDependencies += "io.github.sovedus" %% "fs2-socks5" % "<VERSION>"
+libraryDependencies += "io.github.sovedus" %% "fs2-socks5" % "0.1.0"
 ```
 
 
