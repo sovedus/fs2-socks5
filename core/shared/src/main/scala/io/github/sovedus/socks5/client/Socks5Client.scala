@@ -17,15 +17,19 @@
 package io.github.sovedus.socks5.client
 
 import cats.effect.Async
+import cats.effect.kernel.Resource
 import cats.syntax.all.*
 import com.comcast.ip4s.{Host, Port, SocketAddress}
-import fs2.Pipe
+import fs2.*
 import fs2.io.net.{Network, Socket}
-import io.github.sovedus.socks5.client.auth.ClientAuthenticator
-import io.github.sovedus.socks5.common.Resolver
+import _root_.io.github.sovedus.socks5.client.auth.ClientAuthenticator
+import _root_.io.github.sovedus.socks5.common.Resolver
 
 trait Socks5Client[F[_]] {
-  def connect(host: Host, port: Port): fs2.Pipe[F, Byte, Byte]
+  def connect(host: Host, port: Port): Pipe[F, Byte, Byte]
+
+  def connectResource(host: Host, port: Port): Resource[F, Pipe[F, Byte, Byte]]
+
 }
 
 private[client] object Socks5Client {
@@ -37,7 +41,17 @@ private[client] object Socks5Client {
       resolver: Resolver[F],
       resolveHostOnServer: Boolean
   ): Socks5Client[F] = new Socks5Client[F] {
-    override def connect(targetHost: Host, targetPort: Port): Pipe[F, Byte, Byte] =
+    override def connect(targetHost: Host, targetPort: Port): Pipe[F, Byte, Byte] = {
+      in: Stream[F, Byte] =>
+        Stream
+          .resource(connectResource(targetHost, targetPort))
+          .flatMap(pipe => in.through(pipe))
+    }
+
+    override def connectResource(
+        targetHost: Host,
+        targetPort: Port
+    ): Resource[F, Pipe[F, Byte, Byte]] =
       createPipe(targetHost, targetPort) { socket =>
         Socks5ClientConnectCommandHandler(socket, authenticators, resolver, resolveHostOnServer)
       }
@@ -45,13 +59,13 @@ private[client] object Socks5Client {
     private def createPipe[H <: Socks5ClientCommandHandler[F]](
         targetHost: Host,
         targetPort: Port
-    )(cmdHandler: Socket[F] => F[H]): Pipe[F, Byte, Byte] = { in =>
-      fs2
-        .Stream
-        .resource(Network[F].client(SocketAddress(host, port)))
-        .evalMap(socket => cmdHandler(socket).flatMap(_.handle(targetHost, targetPort)))
-        .flatMap(in.through)
-    }
+    )(cmdHandler: Socket[F] => F[H]): Resource[F, Pipe[F, Byte, Byte]] =
+      Network[F].client(SocketAddress(host, port)).evalMap { socket =>
+        cmdHandler(socket)
+          .flatMap(_.handle(targetHost, targetPort))
+          .map(pipe => (in: Stream[F, Byte]) => in.through(pipe))
+      }
+
   }
 
 }

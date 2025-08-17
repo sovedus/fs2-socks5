@@ -47,7 +47,7 @@ private[client] abstract class Socks5ClientCommandHandler[F[_]: Sync]
 
   protected def handleCommand(targetHost: Host, targetPort: Port): F[fs2.Pipe[F, Byte, Byte]]
 
-  def handle(targetHost: Host, targetPort: Port): F[fs2.Pipe[F, Byte, Byte]] = for {
+  final def handle(targetHost: Host, targetPort: Port): F[fs2.Pipe[F, Byte, Byte]] = for {
     authMethod <- handleHandshake()
     _ <- handleAuthentication(authMethod)
     pipe <- handleCommand(targetHost, targetPort)
