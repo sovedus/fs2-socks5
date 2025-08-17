@@ -9,9 +9,9 @@ name: Continuous Integration
 
 on:
   pull_request:
-    branches: ['**', '!update/**', '!pr/**']
+    branches: [master]
   push:
-    branches: ['**', '!update/**', '!pr/**']
+    branches: [master]
     tags: [v*]
 
 env:
@@ -197,3 +197,28 @@ jobs:
         with:
           modules-ignore: fs2-socks5_2.13 fs2-socks5_3 example_2.13 example_3
           configs-ignore: test scala-tool scala-doc-tool test-internal
+
+  validate-steward:
+    name: Validate Steward Config
+    strategy:
+      matrix:
+        os: [ubuntu-22.04]
+        java: [temurin@11]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout current branch (fast)
+        uses: actions/checkout@v4
+
+      - name: Setup Java (temurin@11)
+        id: setup-java-temurin-11
+        if: matrix.java == 'temurin@11'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - uses: coursier/setup-action@v1
+        with:
+          apps: scala-steward
+
+      - run: scala-steward validate-repo-config .scala-steward.conf
