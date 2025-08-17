@@ -19,7 +19,6 @@ package io.github.sovedus.socks5.server
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import cats.effect.syntax.all.*
-import cats.implicits.catsSyntaxOptionId
 import com.comcast.ip4s.{Host, Port}
 import fs2.io.net.Network
 import io.github.sovedus.socks5.common.{Command, Resolver}
