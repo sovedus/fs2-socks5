@@ -14,7 +14,7 @@ val Scala3 = "3.3.5"
 ThisBuild / crossScalaVersions := Seq(Scala213, Scala3)
 ThisBuild / scalaVersion := Scala213
 
-addCommandAlias("scalafmtFull", "scalafmtAll;scalafmtSbt")
+addCommandAlias("fmt", "scalafmtAll;scalafmtSbt")
 
 lazy val noPublishSettings = Seq(
   publishArtifact := false,

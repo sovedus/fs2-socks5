@@ -42,7 +42,7 @@ private[client] object Socks5Client {
       resolveHostOnServer: Boolean
   ): Socks5Client[F] = new Socks5Client[F] {
     override def connect(targetHost: Host, targetPort: Port): Pipe[F, Byte, Byte] = {
-      in: Stream[F, Byte] =>
+      (in: Stream[F, Byte]) =>
         Stream
           .resource(connectResource(targetHost, targetPort))
           .flatMap(pipe => in.through(pipe))
