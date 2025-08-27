@@ -1,4 +1,4 @@
-[![](https://maven-badges.sml.io/sonatype-central/io.github.sovedus/fs2-socks5_2.13/badge.svg)](https://central.sonatype.com/search?q=fs2-socks5)
+[![](https://maven-badges.sml.io/sonatype-central/io.github.sovedus/fs2-socks5_2.13/badge.svg)](https://central.sonatype.com/search?namespace=io.github.sovedus&q=fs2-socks5)
 
 # fs2-socks5
 
