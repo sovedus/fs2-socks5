@@ -1,3 +1,5 @@
+[![](https://maven-badges.sml.io/sonatype-central/io.github.sovedus/fs2-socks5_2.13/badge.svg)](https://central.sonatype.com/search?q=fs2-socks5)
+
 # fs2-socks5
 
 ---
@@ -12,8 +14,8 @@ This library provides SOCKS5 client and server implementations.
 ## Getting Started
 
 ```scala
-libraryDependencies += "io.github.sovedus" %% "fs2-socks5" % "0.1.0" // for JVM
-libraryDependencies += "io.github.sovedus" %%% "fs2-socks5" % "0.1.0" // for Scala Native
+libraryDependencies += "io.github.sovedus" %% "fs2-socks5" % "<x.y.z>" // for JVM
+libraryDependencies += "io.github.sovedus" %%% "fs2-socks5" % "<x.y.z>" // for Scala Native
 ```
 
 
