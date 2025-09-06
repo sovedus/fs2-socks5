@@ -36,7 +36,7 @@ lazy val core = crossProject(JVMPlatform, NativePlatform)
   .settings(
     name := "fs2-socks5",
     libraryDependencies ++= Seq(
-      "co.fs2" %%% "fs2-io" % "3.12.0",
+      "co.fs2" %%% "fs2-io" % "3.12.2",
       "org.scalameta" %%% "munit" % "1.0.0" % Test,
       "org.typelevel" %%% "munit-cats-effect" % "2.1.0" % Test
     ),
