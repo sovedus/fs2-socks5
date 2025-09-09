@@ -14,8 +14,7 @@ This library provides SOCKS5 client and server implementations.
 ## Getting Started
 
 ```scala
-libraryDependencies += "io.github.sovedus" %% "fs2-socks5" % "<x.y.z>" // for JVM
-libraryDependencies += "io.github.sovedus" %%% "fs2-socks5" % "<x.y.z>" // for Scala Native
+libraryDependencies += "io.github.sovedus" %% "fs2-socks5" % "<x.y.z>"
 ```
 
 
@@ -26,7 +25,7 @@ libraryDependencies += "io.github.sovedus" %%% "fs2-socks5" % "<x.y.z>" // for S
 ## Commands support:
 - [x] `CONNECT`
 - [ ] `BIND`
-- [ ] `UDP_ASSOCIATE` (wait native UPD support in fs2-io)
+- [ ] `UDP_ASSOCIATE`
 
 
 
