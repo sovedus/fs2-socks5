@@ -18,18 +18,18 @@ package io.github.sovedus.socks5.client
 
 import io.github.sovedus.socks5.client.auth.{ClientAuthenticator, NoAuthAuthenticator}
 import io.github.sovedus.socks5.common.Resolver
-
 import cats.effect.Async
-
 import com.comcast.ip4s.*
 import fs2.io.net.Network
+import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 final class Socks5ClientBuilder[F[_]: Async: Network] private (
     val host: Host,
     val port: Port,
     val resolveHostOnServer: Boolean,
     private val authenticators: Map[Byte, ClientAuthenticator[F]],
-    private val resolver: Resolver[F]
+    private val resolver: Resolver[F],
+    private val logger: Logger[F]
 ) {
   private lazy val noAuthAuthenticator = NoAuthAuthenticator()
 
@@ -44,12 +44,14 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
 
   def withResolver(resolver: Resolver[F]): Socks5ClientBuilder[F] = copy(resolver = resolver)
 
+  def withLogger(logger: Logger[F]): Socks5ClientBuilder[F] = copy(logger = logger)
+
   def build: Socks5Client[F] = {
     val nonEmptyAuthenticators =
       if (authenticators.isEmpty) Map(noAuthAuthenticator.code -> noAuthAuthenticator)
       else authenticators
 
-    Socks5Client.create(host, port, nonEmptyAuthenticators, resolver, resolveHostOnServer)
+    Socks5Client.create(host, port, nonEmptyAuthenticators, resolver, resolveHostOnServer, logger)
   }
 
   private def copy(
@@ -57,21 +59,26 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
       port: Port = this.port,
       resolveHostOnServer: Boolean = this.resolveHostOnServer,
       authenticators: Map[Byte, ClientAuthenticator[F]] = this.authenticators,
-      resolver: Resolver[F] = this.resolver
+      resolver: Resolver[F] = this.resolver,
+      logger: Logger[F] = this.logger
   ): Socks5ClientBuilder[F] = new Socks5ClientBuilder(
     host = host,
     port = port,
     resolveHostOnServer = resolveHostOnServer,
     authenticators = authenticators,
-    resolver = resolver)
+    resolver = resolver,
+    logger = logger
+  )
 }
 
 object Socks5ClientBuilder {
 
-  def default[F[_]: Async: Network]: Socks5ClientBuilder[F] = new Socks5ClientBuilder(
+  def default[F[_]: Async: Network: LoggerFactory]: Socks5ClientBuilder[F] = new Socks5ClientBuilder(
     host = host"localhost",
     port = port"1080",
     resolveHostOnServer = true,
     authenticators = Map.empty,
-    resolver = Resolver.default)
+    resolver = Resolver.default,
+    logger = LoggerFactory[F].getLoggerFromClass(Socks5Client.getClass)
+  )
 }

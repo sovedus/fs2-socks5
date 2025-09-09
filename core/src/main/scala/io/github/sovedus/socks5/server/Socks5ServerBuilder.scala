@@ -18,11 +18,10 @@ package io.github.sovedus.socks5.server
 
 import io.github.sovedus.socks5.common.{Command, Resolver}
 import io.github.sovedus.socks5.server.auth.ServerAuthenticator
-
 import cats.effect.{Async, Resource}
-
 import com.comcast.ip4s.*
 import fs2.io.net.Network
+import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 final class Socks5ServerBuilder[F[_]: Async: Network] private (
     val host: Host,
@@ -31,7 +30,8 @@ final class Socks5ServerBuilder[F[_]: Async: Network] private (
     private val authenticators: Map[Byte, ServerAuthenticator[F]],
     private val resolver: Resolver[F],
     private val errorHandler: ErrorHandler[F],
-    private val commands: Map[Command, Socks5ServerCommandHandler[F]]
+    private val commands: Map[Command, Socks5ServerCommandHandler[F]],
+    private val logger: Logger[F]
 ) {
   def withHost(host: Host): Socks5ServerBuilder[F] = copy(host = host)
 
@@ -54,6 +54,8 @@ final class Socks5ServerBuilder[F[_]: Async: Network] private (
   def withConnectionHandler(handler: Socks5ServerCommandHandler[F]): Socks5ServerBuilder[F] =
     copy(commands = commands.updated(Command.CONNECT, handler))
 
+  def withLogger(logger: Logger[F]): Socks5ServerBuilder[F] = copy(logger = logger)
+
   def build: Resource[F, Socks5Server[F]] = Socks5Server.createAndStart(
     host,
     port,
@@ -61,7 +63,9 @@ final class Socks5ServerBuilder[F[_]: Async: Network] private (
     resolver,
     limitConnections,
     errorHandler,
-    commands)
+    commands,
+    logger
+  )
 
   private def copy(
       host: Host = this.host,
@@ -70,7 +74,8 @@ final class Socks5ServerBuilder[F[_]: Async: Network] private (
       authenticators: Map[Byte, ServerAuthenticator[F]] = this.authenticators,
       resolver: Resolver[F] = this.resolver,
       errorHandler: ErrorHandler[F] = this.errorHandler,
-      commands: Map[Command, Socks5ServerCommandHandler[F]] = this.commands
+      commands: Map[Command, Socks5ServerCommandHandler[F]] = this.commands,
+      logger: Logger[F] = this.logger
   ): Socks5ServerBuilder[F] = new Socks5ServerBuilder(
     host = host,
     port = port,
@@ -78,18 +83,21 @@ final class Socks5ServerBuilder[F[_]: Async: Network] private (
     authenticators = authenticators,
     resolver = resolver,
     errorHandler = errorHandler,
-    commands = commands)
+    commands = commands,
+    logger = logger
+  )
 }
 
 object Socks5ServerBuilder {
 
-  def default[F[_]: Async: Network]: Socks5ServerBuilder[F] = new Socks5ServerBuilder(
+  def default[F[_]: Async: Network: LoggerFactory]: Socks5ServerBuilder[F] = new Socks5ServerBuilder(
     host = host"localhost",
     port = port"1080",
     limitConnections = Int.MaxValue,
     authenticators = Map.empty,
     resolver = Resolver.default,
-    errorHandler = ErrorHandler.stderr,
-    commands = Map(Command.CONNECT -> new Socks5ServerConnectCommandHandler())
+    errorHandler = ErrorHandler.default,
+    commands = Map(Command.CONNECT -> new Socks5ServerConnectCommandHandler()),
+    logger = LoggerFactory[F].getLoggerFromClass(Socks5Server.getClass)
   )
 }

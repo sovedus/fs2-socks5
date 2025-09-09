@@ -17,15 +17,17 @@
 package io.github.sovedus.socks5.server
 
 import io.github.sovedus.socks5.server.auth.NoAuthAuthenticator
-
 import cats.effect.{IO, Resource}
-
 import com.comcast.ip4s.*
 import fs2.{Chunk, Pipe}
 import fs2.io.net.Network
 import munit.CatsEffectSuite
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.noop.NoOpFactory
 
 class Socks5ServerSuite extends CatsEffectSuite {
+
+  private implicit val loggerFactory: LoggerFactory[IO] = NoOpFactory[IO]
 
   test("should return NO_ACCEPTABLE_METHODS when authentication method not supported") {
     val handshakeReq = List[Byte](5, 1, 2)

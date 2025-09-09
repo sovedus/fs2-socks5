@@ -31,8 +31,12 @@ import fs2.Chunk
 import fs2.concurrent.SignallingRef
 import fs2.io.net.Network
 import munit.CatsEffectSuite
+import org.typelevel.log4cats.LoggerFactory
+import org.typelevel.log4cats.noop.NoOpFactory
 
 class Socks5ClientSuite extends CatsEffectSuite {
+
+  private implicit val loggerFactory: LoggerFactory[IO] = NoOpFactory[IO]
 
   test("should successfully complete data exchange using CONNECT command") {
     val handshakeReq = List[Byte](5, 1, 0)

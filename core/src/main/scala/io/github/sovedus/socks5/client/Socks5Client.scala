@@ -19,12 +19,12 @@ package io.github.sovedus.socks5.client
 import cats.effect.Async
 import cats.effect.kernel.Resource
 import cats.syntax.all.*
-
 import _root_.io.github.sovedus.socks5.client.auth.ClientAuthenticator
 import _root_.io.github.sovedus.socks5.common.Resolver
 import com.comcast.ip4s.{Host, Port, SocketAddress}
 import fs2.*
 import fs2.io.net.{Network, Socket}
+import org.typelevel.log4cats.Logger
 
 trait Socks5Client[F[_]] {
   def connect(host: Host, port: Port): Pipe[F, Byte, Byte]
@@ -40,7 +40,8 @@ private[client] object Socks5Client {
       port: Port,
       authenticators: Map[Byte, ClientAuthenticator[F]],
       resolver: Resolver[F],
-      resolveHostOnServer: Boolean
+      resolveHostOnServer: Boolean,
+      logger: Logger[F]
   ): Socks5Client[F] = new Socks5Client[F] {
     override def connect(targetHost: Host, targetPort: Port): Pipe[F, Byte, Byte] = {
       (in: Stream[F, Byte]) =>

@@ -24,6 +24,7 @@ ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 
 ThisBuild / scalaVersion := "2.13.16"
 
+addCommandAlias("testCoverage", "clean;coverage;test;coverageReport;coverageOff")
 addCommandAlias("fmt", "scalafmtAll;scalafmtSbt")
 
 lazy val noPublishSettings = Seq(
@@ -44,6 +45,7 @@ lazy val core = project.settings(
   name := "fs2-socks5",
   libraryDependencies ++= Seq(
     "co.fs2" %%% "fs2-io" % "3.12.2",
+    "org.typelevel" %% "log4cats-core" % "2.7.1",
     "org.scalameta" %% "munit" % "1.1.1" % Test,
     "org.typelevel" %% "munit-cats-effect" % "2.1.0" % Test
   ),
