@@ -90,14 +90,15 @@ final class Socks5ServerBuilder[F[_]: Async: Network] private (
 
 object Socks5ServerBuilder {
 
-  def default[F[_]: Async: Network: LoggerFactory]: Socks5ServerBuilder[F] = new Socks5ServerBuilder(
-    host = host"localhost",
-    port = port"1080",
-    limitConnections = Int.MaxValue,
-    authenticators = Map.empty,
-    resolver = Resolver.default,
-    errorHandler = ErrorHandler.default,
-    commands = Map(Command.CONNECT -> new Socks5ServerConnectCommandHandler()),
-    logger = LoggerFactory[F].getLoggerFromClass(Socks5Server.getClass)
-  )
+  def default[F[_]: Async: Network: LoggerFactory]: Socks5ServerBuilder[F] =
+    new Socks5ServerBuilder(
+      host = host"localhost",
+      port = port"1080",
+      limitConnections = Int.MaxValue,
+      authenticators = Map.empty,
+      resolver = Resolver.default,
+      errorHandler = ErrorHandler.default,
+      commands = Map(Command.CONNECT -> new Socks5ServerConnectCommandHandler()),
+      logger = LoggerFactory[F].getLoggerFromClass(Socks5Server.getClass)
+    )
 }

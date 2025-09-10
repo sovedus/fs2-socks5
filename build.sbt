@@ -1,4 +1,5 @@
 lazy val tlScalafixVersion = "0.5.0"
+lazy val log4catsVersion = "2.7.1"
 
 ThisBuild / tlBaseVersion := "0.1"
 ThisBuild / organization := "io.github.sovedus"
@@ -37,23 +38,22 @@ lazy val noPublishSettings = Seq(
 
 lazy val root = project
   .in(file("."))
-  .aggregate(core)
-  .settings(name := "fs2-socks5")
-  .enablePlugins(NoPublishPlugin)
-
-lazy val core = project.settings(
-  name := "fs2-socks5",
-  libraryDependencies ++= Seq(
-    "co.fs2" %%% "fs2-io" % "3.12.2",
-    "org.typelevel" %% "log4cats-core" % "2.7.1",
-    "org.scalameta" %% "munit" % "1.1.1" % Test,
-    "org.typelevel" %% "munit-cats-effect" % "2.1.0" % Test
-  ),
-  Test / testOptions += Tests.Argument("+l")
-)
+  .settings(
+    name := "fs2-socks5",
+    libraryDependencies ++= Seq(
+      "co.fs2" %%% "fs2-io" % "3.12.2",
+      "org.typelevel" %% "log4cats-core" % log4catsVersion,
+      "org.typelevel" %% "log4cats-slf4j" % log4catsVersion % Test,
+      "ch.qos.logback" % "logback-classic" % "1.5.18" % Test,
+      "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+      "org.typelevel" %% "cats-effect-testing-scalatest" % "1.6.0" % Test,
+      "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % Test,
+      "org.scalamock" %% "scalamock" % "7.4.2" % Test
+    )
+  )
 
 lazy val example = project
-  .dependsOn(core)
+  .dependsOn(root)
   .settings(
     Compile / run / fork := true
   )

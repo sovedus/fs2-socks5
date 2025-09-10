@@ -51,7 +51,13 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
       if (authenticators.isEmpty) Map(noAuthAuthenticator.code -> noAuthAuthenticator)
       else authenticators
 
-    Socks5Client.create(host, port, nonEmptyAuthenticators, resolver, resolveHostOnServer, logger)
+    Socks5Client.create(
+      host,
+      port,
+      nonEmptyAuthenticators,
+      resolver,
+      resolveHostOnServer,
+      logger)
   }
 
   private def copy(
@@ -73,12 +79,13 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
 
 object Socks5ClientBuilder {
 
-  def default[F[_]: Async: Network: LoggerFactory]: Socks5ClientBuilder[F] = new Socks5ClientBuilder(
-    host = host"localhost",
-    port = port"1080",
-    resolveHostOnServer = true,
-    authenticators = Map.empty,
-    resolver = Resolver.default,
-    logger = LoggerFactory[F].getLoggerFromClass(Socks5Client.getClass)
-  )
+  def default[F[_]: Async: Network: LoggerFactory]: Socks5ClientBuilder[F] =
+    new Socks5ClientBuilder(
+      host = host"localhost",
+      port = port"1080",
+      resolveHostOnServer = true,
+      authenticators = Map.empty,
+      resolver = Resolver.default,
+      logger = LoggerFactory[F].getLoggerFromClass(Socks5Client.getClass)
+    )
 }
