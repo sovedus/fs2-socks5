@@ -58,7 +58,7 @@ jobs:
         run: sbt githubWorkflowCheck
 
       - name: Build project
-        run: sbt '++ ${{ matrix.scala }}' 'coverage test coverageReport'
+        run: sbt '++ ${{ matrix.scala }}' coverage;test;coverageReport
 
       - name: Make target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master')
