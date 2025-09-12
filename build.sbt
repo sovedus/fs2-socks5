@@ -15,7 +15,7 @@ ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 
 ThisBuild / githubWorkflowBuild := Seq(
   WorkflowStep.Sbt(
-    commands = List("coverage test coverageReport"),
+    commands = List("coverage;test;coverageReport"),
     name = Some("Build project")
   )
 )
