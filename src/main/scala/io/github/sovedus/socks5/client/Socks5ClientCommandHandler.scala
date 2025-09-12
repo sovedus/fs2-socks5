@@ -27,10 +27,13 @@ import io.github.sovedus.socks5.common.Socks5Constants.VERSION_SOCKS5_BYTE
 import io.github.sovedus.socks5.common.Socks5Exception.*
 import io.github.sovedus.socks5.common.auth.AuthenticationStatus
 
+import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all.*
 
 import scala.collection.mutable.ArrayBuffer
+
+import java.io.EOFException
 
 import com.comcast.ip4s.*
 import fs2.Chunk
@@ -57,7 +60,16 @@ private[client] abstract class Socks5ClientCommandHandler[F[_]: Sync]
 
   private def handleHandshake(): F[Byte] = for {
     _ <- sendHandshakeRequest()
-    bytes <- socket.readN(2).map(c => (c(0), c(1)))
+    bytes <- OptionT(socket.read(2))
+      .getOrRaise(new EOFException(
+        "Handshake failed: remote peer closed connection before sending response"))
+      .flatTap(c =>
+        F.raiseWhen(c.size != 2)(
+          new EOFException(
+            "Incomplete handshake response. Expected 2 bytes (version + auth method), " +
+              s"but received only ${c.size} bytes"
+          )))
+      .map(c => (c(0), c(1)))
     (version, authMethod) = bytes
     _ <- checkProtocolVersion(version)
   } yield authMethod

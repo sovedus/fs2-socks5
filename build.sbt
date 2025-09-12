@@ -1,7 +1,7 @@
 lazy val tlScalafixVersion = "0.5.0"
 lazy val log4catsVersion = "2.7.1"
 
-ThisBuild / tlBaseVersion := "0.1"
+ThisBuild / tlBaseVersion := "0.2"
 ThisBuild / organization := "io.github.sovedus"
 ThisBuild / organizationName := "Sovedus"
 ThisBuild / startYear := Some(2025)
@@ -12,6 +12,18 @@ ThisBuild / developers := List(
 ThisBuild / tlCiReleaseBranches := Seq("master")
 ThisBuild / githubWorkflowTargetBranches := Seq("master")
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
+
+ThisBuild / githubWorkflowBuild := Seq(
+  WorkflowStep.Sbt(
+    commands = List("coverage", "test", "coverageReport"),
+    name = Some("Build project")
+  )
+)
+ThisBuild / githubWorkflowPublish += WorkflowStep.Use(
+  name = Some("Upload coverage reports to Codecov"),
+  ref = UseRef.Public("codecov", "codecov-action", "v5"),
+  params = Map("token" -> "${{ secrets.CODECOV_TOKEN }}")
+)
 
 ThisBuild / scalafixDependencies ++= Seq(
   "org.typelevel" %% "typelevel-scalafix" % tlScalafixVersion,
@@ -40,6 +52,12 @@ lazy val root = project
   .in(file("."))
   .settings(
     name := "fs2-socks5",
+    Test / fork := true,
+    Test / logBuffered := false,
+    Test / javaOptions ++= Seq(
+      "-Dcats.effect.report.unhandledFiberErrors=false"
+    ),
+    Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oD"),
     libraryDependencies ++= Seq(
       "co.fs2" %%% "fs2-io" % "3.12.2",
       "org.typelevel" %% "log4cats-core" % log4catsVersion,

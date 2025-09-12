@@ -16,9 +16,11 @@
 
 package io.github.sovedus.socks5.common
 
+import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all.*
 
+import java.io.EOFException
 import java.nio.charset.StandardCharsets
 
 import com.comcast.ip4s.*
@@ -54,37 +56,60 @@ abstract class Socks5AddressHelper[F[_]: Sync] {
     .map(Port.fromInt)
     .map(_.getOrElse(throw HandleCommandException("Failed to parse port")))
 
-  private def parseIPv4(): F[IpAddress] = socket
-    .readN(IPv4_LEN)
+  private def parseIPv4(): F[IpAddress] = OptionT(socket.read(IPv4_LEN))
+    .getOrRaise(new EOFException(
+      "Failed to read IPv4 address: connection closed before receiving 4 bytes"))
+    .flatTap(c =>
+      F.raiseWhen(c.size != IPv4_LEN)(
+        new EOFException(s"Incomplete IPv4 address: expected $IPv4_LEN bytes, " +
+          s"but received only ${c.size} bytes before connection closed")))
     .map(chunk =>
       Ipv4Address.fromBytes(chunk(0).toInt, chunk(1).toInt, chunk(2).toInt, chunk(3).toInt))
 
-  private def parseIPv6(): F[IpAddress] = socket.readN(IPv6_LEN).map { chunk =>
-    Ipv6Address.fromBytes(
-      chunk(0).toInt,
-      chunk(1).toInt,
-      chunk(2).toInt,
-      chunk(3).toInt,
-      chunk(4).toInt,
-      chunk(5).toInt,
-      chunk(6).toInt,
-      chunk(7).toInt,
-      chunk(8).toInt,
-      chunk(9).toInt,
-      chunk(10).toInt,
-      chunk(11).toInt,
-      chunk(12).toInt,
-      chunk(13).toInt,
-      chunk(14).toInt,
-      chunk(15).toInt
-    )
-  }
+  private def parseIPv6(): F[IpAddress] = OptionT(socket.read(IPv6_LEN))
+    .getOrRaise(new EOFException(
+      "Failed to read IPv6 address: connection closed before receiving any bytes"))
+    .flatTap(c =>
+      F.raiseWhen(c.size != IPv6_LEN)(
+        new EOFException(s"Incomplete IPv6 address: expected $IPv6_LEN bytes (16 octets), " +
+          s"but received only ${c.size} bytes before stream ended")))
+    .map { chunk =>
+      Ipv6Address.fromBytes(
+        chunk(0).toInt,
+        chunk(1).toInt,
+        chunk(2).toInt,
+        chunk(3).toInt,
+        chunk(4).toInt,
+        chunk(5).toInt,
+        chunk(6).toInt,
+        chunk(7).toInt,
+        chunk(8).toInt,
+        chunk(9).toInt,
+        chunk(10).toInt,
+        chunk(11).toInt,
+        chunk(12).toInt,
+        chunk(13).toInt,
+        chunk(14).toInt,
+        chunk(15).toInt
+      )
+    }
 
-  private def parseFQDN(): F[Hostname] = socket
-    .readN(1)
-    .map(_(0).toInt)
-    .flatMap(socket.readN)
-    .map(chunk => new String(chunk.toArray, StandardCharsets.UTF_8))
-    .map(Hostname.fromString)
-    .map(_.getOrElse(throw HandleCommandException("Failed to parse domain name")))
+  private def parseFQDN(): F[Hostname] = {
+    val optF = for {
+      chunkSize <- OptionT(socket.read(1))
+      count = chunkSize(0).toInt
+      _ = if (count <= 0)
+        throw new IllegalArgumentException(s"Invalid FQDN length: $count (must be positive)")
+      chunkData <- OptionT(socket.read(count))
+      _ = if (chunkData.size != count)
+        throw new EOFException(
+          s"Expected $count bytes for FQDN, but got only ${chunkData.size}")
+      str = new String(chunkData.toArray, StandardCharsets.UTF_8)
+      hostname = Hostname
+        .fromString(str)
+        .getOrElse(throw HandleCommandException("Failed to parse domain name"))
+    } yield hostname
+
+    optF.getOrRaise(new EOFException("Failed to read FQDN data byte(s)"))
+  }
 }

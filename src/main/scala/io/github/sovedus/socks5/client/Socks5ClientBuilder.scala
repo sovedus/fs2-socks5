@@ -18,10 +18,13 @@ package io.github.sovedus.socks5.client
 
 import io.github.sovedus.socks5.client.auth.{ClientAuthenticator, NoAuthAuthenticator}
 import io.github.sovedus.socks5.common.Resolver
+
 import cats.effect.Async
+
+import org.typelevel.log4cats.{Logger, LoggerFactory}
+
 import com.comcast.ip4s.*
 import fs2.io.net.Network
-import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 final class Socks5ClientBuilder[F[_]: Async: Network] private (
     val host: Host,
@@ -51,13 +54,7 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
       if (authenticators.isEmpty) Map(noAuthAuthenticator.code -> noAuthAuthenticator)
       else authenticators
 
-    Socks5Client.create(
-      host,
-      port,
-      nonEmptyAuthenticators,
-      resolver,
-      resolveHostOnServer,
-      logger)
+    Socks5Client.create(host, port, nonEmptyAuthenticators, resolver, resolveHostOnServer)
   }
 
   private def copy(
