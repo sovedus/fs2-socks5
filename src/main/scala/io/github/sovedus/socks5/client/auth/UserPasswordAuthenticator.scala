@@ -57,10 +57,15 @@ object UserPasswordAuthenticator {
     val userBytes = user.getBytes
     val passwordBytes = password.getBytes
 
-    if (userBytes.length < 1) { throw new Exception("Username cannot be empty") }
-    else if (userBytes.length > 255) { throw new Exception("Username is too long") }
-    else if (passwordBytes.length < 1) { throw new Exception("Password cannot be empty") }
-    else if (passwordBytes.length > 255) { throw new Exception("Password is too long") }
+    if (userBytes.isEmpty && passwordBytes.isEmpty)
+      throw new IllegalArgumentException("Username and password cannot be empty")
+    if (userBytes.length < 1) throw new IllegalArgumentException("Username cannot be empty")
+    else if (userBytes.length > 255)
+      throw new IllegalArgumentException("Username is too long")
+    else if (passwordBytes.length < 1)
+      throw new IllegalArgumentException("Password cannot be empty")
+    else if (passwordBytes.length > 255)
+      throw new IllegalArgumentException("Password is too long")
 
     new UserPasswordAuthenticator(makeAuthData(userBytes, passwordBytes))
   }

@@ -19,12 +19,14 @@ package io.github.sovedus.socks5.client
 import cats.effect.Async
 import cats.effect.kernel.Resource
 import cats.syntax.all.*
+
+import org.typelevel.log4cats.Logger
+
 import _root_.io.github.sovedus.socks5.client.auth.ClientAuthenticator
 import _root_.io.github.sovedus.socks5.common.Resolver
 import com.comcast.ip4s.{Host, Port, SocketAddress}
 import fs2.*
 import fs2.io.net.{Network, Socket}
-import org.typelevel.log4cats.Logger
 
 trait Socks5Client[F[_]] {
   def connect(host: Host, port: Port): Pipe[F, Byte, Byte]

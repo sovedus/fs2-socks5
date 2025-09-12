@@ -18,12 +18,15 @@ package io.github.sovedus.socks5.server
 
 import io.github.sovedus.socks5.common.{Command, Resolver}
 import io.github.sovedus.socks5.server.auth.ServerAuthenticator
+
 import cats.effect.{Async, Resource}
 import cats.effect.syntax.all.*
 import cats.syntax.all.*
+
+import org.typelevel.log4cats.Logger
+
 import com.comcast.ip4s.{Host, Port}
 import fs2.io.net.Network
-import org.typelevel.log4cats.Logger
 
 class Socks5Server[F[_]] private (
     val host: Host,

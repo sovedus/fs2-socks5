@@ -17,6 +17,7 @@
 package io.github.sovedus.socks5.server
 
 import cats.effect.Sync
+
 import org.typelevel.log4cats.LoggerFactory
 
 trait ErrorHandler[F[_]] {

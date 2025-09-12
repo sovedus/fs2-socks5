@@ -20,8 +20,11 @@ import io.github.sovedus.socks5.client.auth.ClientAuthenticator
 import io.github.sovedus.socks5.common.Command.CONNECT
 import io.github.sovedus.socks5.common.Resolver
 
+import cats.data.OptionT
 import cats.effect.Async
 import cats.syntax.all.*
+
+import java.io.EOFException
 
 import com.comcast.ip4s.*
 import fs2.Pipe
@@ -47,7 +50,12 @@ private[client] class Socks5ClientConnectCommandHandler[F[_]: Async](
   } yield pipe
 
   private def parseCommandReply(): F[fs2.Pipe[F, Byte, Byte]] = for {
-    bytes <- socket.readN(4).map(c => (c(0), c(1), c(2), c(3)))
+    bytes <- OptionT(socket.read(4))
+      .getOrRaise(new EOFException("Unexpected end of stream while reading SOCKS5 reply"))
+      .flatTap(c =>
+        F.raiseWhen(c.size != 4)(
+          new EOFException("Incomplete command reply from SOCKS5 server")))
+      .map(c => (c(0), c(1), c(2), c(3)))
     (version, replyCode, _, addressType) = bytes
     _ <- checkProtocolVersion(version)
     _ <- checkReplyCode(replyCode)
