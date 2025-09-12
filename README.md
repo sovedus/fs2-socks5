@@ -1,3 +1,5 @@
+[![Continuous Integration](https://github.com/sovedus/fs2-socks5/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/sovedus/fs2-socks5/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/sovedus/fs2-socks5/branch/master/graph/badge.svg?token=TS6AF2SAM9)](https://codecov.io/gh/sovedus/fs2-socks5)
 [![](https://maven-badges.sml.io/sonatype-central/io.github.sovedus/fs2-socks5_2.13/badge.svg)](https://central.sonatype.com/search?namespace=io.github.sovedus&q=fs2-socks5)
 
 # fs2-socks5
