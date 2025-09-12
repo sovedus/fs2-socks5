@@ -23,8 +23,6 @@ import cats.effect.{Async, Resource}
 import cats.effect.syntax.all.*
 import cats.syntax.all.*
 
-import org.typelevel.log4cats.Logger
-
 import com.comcast.ip4s.{Host, Port}
 import fs2.io.net.Network
 
@@ -43,8 +41,7 @@ object Socks5Server {
       resolver: Resolver[F],
       limitConnections: Int,
       errorHandler: ErrorHandler[F],
-      commands: Map[Command, Socks5ServerCommandHandler[F]],
-      logger: Logger[F]
+      commands: Map[Command, Socks5ServerCommandHandler[F]]
   ): Resource[F, Socks5Server[F]] =
     for {
       server <- Network[F].serverResource(host.some, port.some)

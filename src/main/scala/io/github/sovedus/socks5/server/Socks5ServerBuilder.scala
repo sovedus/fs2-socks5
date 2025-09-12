@@ -66,8 +66,7 @@ final class Socks5ServerBuilder[F[_]: Async: Network] private (
     resolver,
     limitConnections,
     errorHandler,
-    commands,
-    logger
+    commands
   )
 
   private def copy(
