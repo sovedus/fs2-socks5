@@ -1,7 +1,7 @@
 lazy val tlScalafixVersion = "0.5.0"
 lazy val log4catsVersion = "2.7.1"
 
-ThisBuild / tlBaseVersion := "0.1"
+ThisBuild / tlBaseVersion := "0.2"
 ThisBuild / organization := "io.github.sovedus"
 ThisBuild / organizationName := "Sovedus"
 ThisBuild / startYear := Some(2025)
