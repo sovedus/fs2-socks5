@@ -58,6 +58,9 @@ private[server] class Socks5ServerConnectionHandler[F[_]: Async](
   private def handleHandshake(): F[Byte] = for {
     bytes <- socket.readN(2).map(c => (c(0), c(1)))
     (version, nMethods) = bytes
+    _ = if (nMethods <= 0)
+      throw new IllegalArgumentException(
+        s"Invalid number of authentication methods: $nMethods (must be positive)")
     _ <- checkProtocolVersion(version)
     methods <- socket.readN(nMethods.toInt).map(_.toArray)
     authMethod <- getFirstSuitableMethod(methods)
@@ -69,7 +72,8 @@ private[server] class Socks5ServerConnectionHandler[F[_]: Async](
       .get(authMethod)
       .toOptionT
       .semiflatMap(_.authenticate(socket))
-      .getOrRaise(new NoSuchElementException(s"Unsupported authentication method: 0x${authMethod.toHexString}"))
+      .getOrRaise(new NoSuchElementException(
+        s"Unsupported authentication method: 0x${authMethod.toInt.toHexString}"))
       .map(_ == AuthenticationStatus.SUCCESS)
       .ifM(F.unit, F.raiseError(AuthenticationException("User authentication failed")))
   }
