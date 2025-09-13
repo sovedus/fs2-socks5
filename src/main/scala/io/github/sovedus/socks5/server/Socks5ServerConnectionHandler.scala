@@ -69,7 +69,7 @@ private[server] class Socks5ServerConnectionHandler[F[_]: Async](
       .get(authMethod)
       .toOptionT
       .semiflatMap(_.authenticate(socket))
-      .getOrRaise(new Exception("Impossible"))
+      .getOrRaise(new NoSuchElementException(s"Unsupported authentication method: 0x${authMethod.toHexString}"))
       .map(_ == AuthenticationStatus.SUCCESS)
       .ifM(F.unit, F.raiseError(AuthenticationException("User authentication failed")))
   }
