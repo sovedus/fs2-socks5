@@ -4,10 +4,13 @@ import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.IpLiteralSyntax
 import fs2.concurrent.SignallingRef
 import io.github.sovedus.socks5.client.Socks5ClientBuilder
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 import scala.concurrent.duration.DurationInt
 
 object ClientConnect extends IOApp.Simple {
+
+  implicit val loggerFactory: Slf4jFactory[IO] = Slf4jFactory.create[IO]
 
   override def run: IO[Unit] = {
 

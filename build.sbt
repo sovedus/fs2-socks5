@@ -73,6 +73,9 @@ lazy val root = project
 lazy val example = project
   .dependsOn(root)
   .settings(
-    Compile / run / fork := true
+    Compile / run / fork := true,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "log4cats-slf4j" % log4catsVersion
+    )
   )
   .enablePlugins(NoPublishPlugin)

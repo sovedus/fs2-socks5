@@ -4,8 +4,11 @@ import cats.effect.{IO, IOApp}
 import com.comcast.ip4s.IpLiteralSyntax
 import io.github.sovedus.socks5.server.Socks5ServerBuilder
 import io.github.sovedus.socks5.server.auth.NoAuthAuthenticator
+import org.typelevel.log4cats.slf4j.Slf4jFactory
 
 object Server extends IOApp.Simple {
+
+  implicit val loggerFactory: Slf4jFactory[IO] = Slf4jFactory.create[IO]
 
   override def run: IO[Unit] = {
     Socks5ServerBuilder
