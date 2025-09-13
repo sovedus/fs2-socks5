@@ -23,6 +23,7 @@ object Handshake {
 
   val noAuthenticationMethod: Byte = 0x00
   val userPasswordAuthenticationMethod: Byte = 0x02
+  val noAcceptableAuthenticationMethods: Byte = 0xff.toByte
 
   object Request {
     def withoutAuthentication: List[Byte] =
@@ -36,11 +37,17 @@ object Handshake {
 
       List[Byte](protocolVersion, nMethods) ++ authMethods.toList
     }
+
+    def create(authMethod: Byte): List[Byte] =
+      List[Byte](protocolVersion, 1, authMethod)
   }
 
   object Response {
     def withoutAuthentication: List[Byte] =
       List[Byte](protocolVersion, noAuthenticationMethod)
+
+    def withNoAcceptableMethods: List[Byte] =
+      List[Byte](protocolVersion, noAcceptableAuthenticationMethods)
 
     def withUserPassword: List[Byte] =
       List[Byte](protocolVersion, userPasswordAuthenticationMethod)
