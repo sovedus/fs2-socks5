@@ -27,8 +27,8 @@ object Socks5Exception {
 
   case class AuthenticationException(message: String) extends Socks5Exception(message)
 
-  case class UnsupportedCommandException(command: Command)
-      extends Socks5Exception(s"Unsupported command: $command")
+  case class UnsupportedCommandException(code: Byte)
+      extends Socks5Exception(s"Unsupported command: 0x${code.toInt.toHexString}")
 
   case class HandleCommandException(message: String) extends Socks5Exception(message)
 

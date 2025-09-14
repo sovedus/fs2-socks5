@@ -16,35 +16,25 @@
 
 package io.github.sovedus.socks5.common
 
-import Socks5Exception.HandleCommandException
+import io.github.sovedus.socks5.common.Socks5Exception.UnsupportedCommandException
 
-sealed trait Command extends Serializable with Product {
-  def code: Byte
+final class Command(val code: Byte) extends AnyVal {
 
-  override def toString: String = this match {
-    case Command.CONNECT => "CONNECT"
-    case Command.BIND => "BIND"
-    case Command.UDP_ASSOCIATE => "UDP_ASSOCIATE"
+  override def toString: String = code match {
+    case 0x01 => "CONNECT"
+    case 0x02 => "BIND"
+    case 0x03 => "UDP_ASSOCIATE"
+    case _ => s"OTHER($code)"
   }
 }
 
 object Command {
-  case object CONNECT extends Command {
-    override def code: Byte = 0x01
-  }
+  val CONNECT: Command = Command(0x01)
+  val BIND: Command = Command(0x02)
+  val UDP_ASSOCIATE: Command = Command(0x03)
 
-  case object BIND extends Command {
-    override def code: Byte = 0x02
-  }
-
-  case object UDP_ASSOCIATE extends Command {
-    override def code: Byte = 0x03
-  }
-
-  def from(cmd: Byte): Command = cmd match {
-    case 0x01 => CONNECT
-    case 0x02 => BIND
-    case 0x03 => UDP_ASSOCIATE
-    case c => throw HandleCommandException(s"Invalid command: $c")
+  def apply(cmd: Byte): Command = cmd match {
+    case 0x01 | 0x02 | 0x03 => new Command(cmd)
+    case c => throw UnsupportedCommandException(c)
   }
 }
