@@ -64,7 +64,7 @@ lazy val root = project
       "org.typelevel" %% "log4cats-slf4j" % log4catsVersion % Test,
       "ch.qos.logback" % "logback-classic" % "1.5.18" % Test,
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
-      "org.typelevel" %% "cats-effect-testing-scalatest" % "1.6.0" % Test,
+      "org.typelevel" %% "cats-effect-testing-scalatest" % "1.7.0" % Test,
       "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % Test,
       "org.scalamock" %% "scalamock" % "7.5.0" % Test,
       "org.scalamock" %% "scalamock-cats-effect" % "7.5.0" % Test
