@@ -16,8 +16,8 @@
 
 package io.github.sovedus.socks5.server
 
-import io.github.sovedus.socks5.common.{Command, CommandReplyType, Resolver}
-import io.github.sovedus.socks5.common.Socks5Constants.{PORT_ZERO, VERSION_SOCKS5_BYTE}
+import io.github.sovedus.socks5.common.{Command, CommandReplyType, ReadWriter, Resolver}
+import io.github.sovedus.socks5.common.Socks5Constants.VERSION_SOCKS5
 import io.github.sovedus.socks5.common.Socks5Exception.{
   AuthenticationException,
   ProtocolVersionException,
@@ -37,9 +37,16 @@ import org.scalatest.matchers.should.Matchers
 
 import java.net.UnknownHostException
 
-import com.comcast.ip4s.{IpAddress, Ipv4Address, Ipv6Address, Port}
+import com.comcast.ip4s.{
+  IpAddress,
+  IpLiteralSyntax,
+  Ipv4Address,
+  Ipv6Address,
+  Port,
+  SocketAddress
+}
 import fs2.{Chunk, Pipe}
-import fs2.io.net.{ConnectException, Socket}
+import fs2.io.net.ConnectException
 
 class Socks5ServerConnectionHandlerSpec
     extends AsyncFlatSpec
@@ -49,71 +56,79 @@ class Socks5ServerConnectionHandlerSpec
     with OptionValues {
 
   "Socks5ServerConnectionHandler" should "throw IllegalArgumentException for negative number of authentication methods" in {
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
 
-    val handler = new Socks5ServerConnectionHandler[IO](Map.empty, Map.empty, socketStub, null)
+    val serverAddress = SocketAddress(ipv4"127.0.0.1", port"8080")
+    val handler =
+      new Socks5ServerConnectionHandler[IO](rwStub, serverAddress, null, Map.empty, Map.empty)
 
     val protocolVersion: Byte = 0x05
     val negativeNMethods: Byte = -1
 
     for {
-      _ <- (socketStub.readN _).succeedsWith(Chunk[Byte](protocolVersion, negativeNMethods))
-      _ <- (socketStub.write _).succeedsWith(())
+      _ <- rwStub.read2.succeedsWith((protocolVersion, negativeNMethods))
+      _ <- (rwStub.write _).succeedsWith(())
       _ <- handler
         .handle()
         .assertThrowsWithMessage[IllegalArgumentException](
-          "Invalid number of authentication methods: -1 (must be positive)")
-      calls <- (socketStub.write _).callsIO
+          "Invalid number of authentication methods: -1 (must be positive)"
+        )
+      calls <- (rwStub.write _).callsIO
     } yield calls shouldBe List(
       Chunk[Byte](
         protocolVersion,
         CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE.code,
         0x00.toByte /*rsv*/,
         0x01 /*IPv4*/,
+        127,
         0,
         0,
-        0,
-        0,
-        (PORT_ZERO.value >> 8).toByte,
-        PORT_ZERO.value.toByte
+        1,
+        (serverAddress.port.value >> 8).toByte,
+        serverAddress.port.value.toByte
       )
     )
   }
 
   it should "respond with chosen auth method code then throw exception on authentication failure" in {
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
 
     val failServerAuthenticator = new ServerAuthenticator[IO] {
       override def code: Byte = 0x02
 
-      override def authenticate(socket: Socket[IO]): IO[AuthenticationStatus] = IO(FAILURE)
+      override def authenticate(rw: ReadWriter[IO]): IO[AuthenticationStatus] = IO(FAILURE)
     }
 
     val authenticators = Map(
       failServerAuthenticator.code -> failServerAuthenticator
     )
 
+    val serverAddress = SocketAddress(ipv4"127.0.0.1", port"8080")
     val handler =
-      new Socks5ServerConnectionHandler[IO](authenticators, Map.empty, socketStub, null)
+      new Socks5ServerConnectionHandler[IO](
+        rwStub,
+        serverAddress,
+        null,
+        authenticators,
+        Map.empty
+      )
 
     val protocolVersion: Byte = 0x05
     val NMethods: Byte = 1
 
     for {
-      _ <- (socketStub.readN _).returnsIOOnCall {
-        case 1 => IO(Chunk[Byte](protocolVersion, NMethods))
-        case 2 => IO(Chunk[Byte](failServerAuthenticator.code))
-      }
-      _ <- (socketStub.write _).succeedsWith(())
+      _ <- rwStub.read2.succeedsWith((protocolVersion, NMethods))
+      _ <- (rwStub.readN _).succeedsWith(Chunk(failServerAuthenticator.code))
+      _ <- (rwStub.write _).succeedsWith(())
       _ <- handler
         .handle()
         .assertThrowsWithMessage[AuthenticationException]("User authentication failed")
-      calls <- (socketStub.write _).callsIO
-    } yield calls shouldBe List(Chunk(VERSION_SOCKS5_BYTE, failServerAuthenticator.code))
+      calls <- (rwStub.write _).callsIO
+    } yield calls shouldBe List(Chunk(VERSION_SOCKS5, failServerAuthenticator.code))
   }
 
   it should "handle resolver failure by sending HOST_UNREACHABLE response and throwing UnknownHostException" in {
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
     val commandHandlerStub = stub[Socks5ServerCommandHandler[IO]]
 
     val resolver = Resolver.default[IO]
@@ -130,44 +145,52 @@ class Socks5ServerConnectionHandlerSpec
 
     val host = "example.local"
 
+    val serverAddress = SocketAddress(ipv4"127.0.0.1", port"8080")
     val handler =
-      new Socks5ServerConnectionHandler[IO](authenticators, commands, socketStub, resolver)
+      new Socks5ServerConnectionHandler[IO](
+        rwStub,
+        serverAddress,
+        resolver,
+        authenticators,
+        commands
+      )
 
     val protocolVersion: Byte = 0x05
     val NMethods: Byte = 1
 
     for {
-      _ <- (socketStub.readN _).returnsIOOnCall {
-        case 1 => IO(Chunk[Byte](protocolVersion, NMethods))
-        case 2 => IO(Chunk[Byte](noAuthAuthenticator.code))
-        case 3 => IO(Chunk[Byte](protocolVersion, Command.CONNECT.code))
-        case 4 => IO(Chunk[Byte](0x0 /*rsv*/, 0x03 /*Domain*/ ))
+      _ <- rwStub.read1.succeedsWith(host.length.toByte)
+      _ <- rwStub.read2.returnsIOOnCall {
+        case 1 => IO((protocolVersion, NMethods))
+        case 2 => IO((protocolVersion, Command.CONNECT.code))
+        case 3 => IO((0x0 /*rsv*/, 0x03 /*Domain*/ ))
       }
-      _ <- (socketStub.read _).returnsIOOnCall {
-        case 1 => IO(Some(Chunk[Byte](host.length.toByte)))
-        case 2 => IO(Some(Chunk.array(host.getBytes)))
+      _ <- (rwStub.readN _).returnsIOOnCall {
+        case 1 => IO(Chunk[Byte](noAuthAuthenticator.code))
+        case 2 => IO(Chunk.array(host.getBytes))
       }
-      _ <- (socketStub.write _).succeedsWith(())
+      _ <- (rwStub.write _).succeedsWith(())
       _ <- handler.handle().assertThrows[UnknownHostException]
-      calls <- (socketStub.write _).callsIO
+      calls <- (rwStub.write _).callsIO
     } yield calls shouldBe List(
-      Chunk[Byte](VERSION_SOCKS5_BYTE, noAuthAuthenticator.code),
+      Chunk[Byte](VERSION_SOCKS5, noAuthAuthenticator.code),
       Chunk[Byte](
         protocolVersion,
         CommandReplyType.HOST_UNREACHABLE.code,
         0x00.toByte /*rsv*/,
         0x01 /*IPv4*/,
+        127,
         0,
         0,
-        0,
-        0,
-        (PORT_ZERO.value >> 8).toByte,
-        PORT_ZERO.value.toByte)
+        1,
+        (serverAddress.port.value >> 8).toByte,
+        serverAddress.port.value.toByte
+      )
     )
   }
 
   it should "handle command handler failure by sending CONNECTION_REFUSED response and throwing ConnectException" in {
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
 
     val resolver = Resolver.default[IO]
 
@@ -192,42 +215,52 @@ class Socks5ServerConnectionHandlerSpec
     val host = Ipv6Address.fromString("::1").value
     val port = 8080
 
+    val serverAddress = SocketAddress(ipv4"127.0.0.1", port"8080")
     val handler =
-      new Socks5ServerConnectionHandler[IO](authenticators, commands, socketStub, resolver)
+      new Socks5ServerConnectionHandler[IO](
+        rwStub,
+        serverAddress,
+        resolver,
+        authenticators,
+        commands
+      )
 
     val protocolVersion: Byte = 0x05
     val NMethods: Byte = 1
 
     for {
-      _ <- (socketStub.readN _).returnsIOOnCall {
-        case 1 => IO(Chunk[Byte](protocolVersion, NMethods))
-        case 2 => IO(Chunk[Byte](noAuthAuthenticator.code))
-        case 3 => IO(Chunk[Byte](protocolVersion, Command.CONNECT.code))
-        case 4 => IO(Chunk[Byte](0x0 /*rsv*/, 0x04 /*IPv6*/ ))
-        case 5 => IO(Chunk[Byte]((port >> 8).toByte, port.toByte))
+      _ <- rwStub.read2.returnsIOOnCall {
+        case 1 => IO((protocolVersion, NMethods))
+        case 2 => IO((protocolVersion, Command.CONNECT.code))
+        case 3 => IO((0x0 /*rsv*/, 0x04 /*IPv6*/ ))
+        case 4 => IO(((port >> 8).toByte, port.toByte))
       }
-      _ <- (socketStub.read _).returnsIOOnCall { case 1 => IO(Some(Chunk.array(host.toBytes))) }
-      _ <- (socketStub.write _).succeedsWith(())
+      _ <- (rwStub.readN _).returnsIOOnCall {
+        case 1 => IO(Chunk[Byte](noAuthAuthenticator.code))
+        case 2 => IO(Chunk.array(host.toBytes))
+      }
+      _ <- (rwStub.write _).succeedsWith(())
       _ <- handler.handle().assertThrows[ConnectException]
-      calls <- (socketStub.write _).callsIO
+      calls <- (rwStub.write _).callsIO
     } yield calls shouldBe List(
-      Chunk[Byte](VERSION_SOCKS5_BYTE, noAuthAuthenticator.code),
+      Chunk[Byte](VERSION_SOCKS5, noAuthAuthenticator.code),
       Chunk[Byte](
         protocolVersion,
         CommandReplyType.CONNECTION_REFUSED.code,
         0x00.toByte /*rsv*/,
         0x01 /*IPv4*/,
+        127,
         0,
         0,
-        0,
-        0,
-        (PORT_ZERO.value >> 8).toByte,
-        PORT_ZERO.value.toByte)
+        1,
+        (serverAddress.port.value >> 8).toByte,
+        serverAddress.port.value.toByte
+      )
     )
   }
 
   it should "reject connection with GENERAL_SOCKS_SERVER_FAILURE and throw ProtocolVersionException for wrong SOCKS version" in {
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
 
     val resolver = Resolver.default[IO]
 
@@ -249,38 +282,43 @@ class Socks5ServerConnectionHandlerSpec
       Command.CONNECT -> failCommandHandler
     )
 
+    val serverAddress = SocketAddress(ipv4"127.0.0.1", port"8080")
     val handler =
-      new Socks5ServerConnectionHandler[IO](authenticators, commands, socketStub, resolver)
+      new Socks5ServerConnectionHandler[IO](
+        rwStub,
+        serverAddress,
+        resolver,
+        authenticators,
+        commands
+      )
 
     val badProtocolVersion: Byte = 0x06
     val protocolVersion: Byte = 0x05
     val NMethods: Byte = 1
 
     for {
-      _ <- (socketStub.readN _).returnsIOOnCall {
-        case 1 => IO(Chunk[Byte](badProtocolVersion, NMethods))
-      }
-      _ <- (socketStub.write _).succeedsWith(())
+      _ <- rwStub.read2.returnsIOOnCall { case 1 => IO((badProtocolVersion, NMethods)) }
+      _ <- (rwStub.write _).succeedsWith(())
       _ <- handler.handle().assertThrows[ProtocolVersionException]
-      calls <- (socketStub.write _).callsIO
+      calls <- (rwStub.write _).callsIO
     } yield calls shouldBe List(
       Chunk[Byte](
         protocolVersion,
         CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE.code,
         0x00.toByte /*rsv*/,
         0x01 /*IPv4*/,
+        127,
         0,
         0,
-        0,
-        0,
-        (PORT_ZERO.value >> 8).toByte,
-        PORT_ZERO.value.toByte
+        1,
+        (serverAddress.port.value >> 8).toByte,
+        serverAddress.port.value.toByte
       )
     )
   }
 
   it should "send COMMAND_NOT_SUPPORTED response and throw UnsupportedCommandException for unsupported command" in {
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
     val failCommandHandlerStub = stub[Socks5ServerCommandHandler[IO]]
 
     val resolver = Resolver.default[IO]
@@ -295,43 +333,51 @@ class Socks5ServerConnectionHandlerSpec
       Command.CONNECT -> failCommandHandlerStub
     )
 
+    val serverAddress = SocketAddress(ipv4"127.0.0.1", port"8080")
     val handler =
-      new Socks5ServerConnectionHandler[IO](authenticators, commands, socketStub, resolver)
+      new Socks5ServerConnectionHandler[IO](
+        rwStub,
+        serverAddress,
+        resolver,
+        authenticators,
+        commands
+      )
 
     val protocolVersion: Byte = 0x05
     val NMethods: Byte = 1
     val badCommandCode: Byte = 0x08
 
     for {
-      _ <- (socketStub.readN _).returnsIOOnCall {
-        case 1 => IO(Chunk[Byte](protocolVersion, NMethods))
-        case 2 => IO(Chunk[Byte](noAuthAuthenticator.code))
-        case 3 => IO(Chunk[Byte](protocolVersion, badCommandCode))
+      _ <- rwStub.read2.returnsIOOnCall {
+        case 1 => IO((protocolVersion, NMethods))
+        case 2 => IO((protocolVersion, badCommandCode))
       }
-      _ <- (socketStub.write _).succeedsWith(())
+      _ <- (rwStub.readN _).succeedsWith(Chunk[Byte](noAuthAuthenticator.code))
+      _ <- (rwStub.write _).succeedsWith(())
       _ <- (failCommandHandlerStub.handle _).returnsIOWith(
-        Resource.raiseError[IO, Pipe[IO, Byte, Byte], Throwable](new ConnectException()))
+        Resource.raiseError[IO, Pipe[IO, Byte, Byte], Throwable](new ConnectException())
+      )
       _ <- handler.handle().assertThrows[UnsupportedCommandException]
-      calls <- (socketStub.write _).callsIO
+      calls <- (rwStub.write _).callsIO
     } yield calls shouldBe List(
-      Chunk[Byte](VERSION_SOCKS5_BYTE, noAuthAuthenticator.code),
+      Chunk[Byte](VERSION_SOCKS5, noAuthAuthenticator.code),
       Chunk[Byte](
         protocolVersion,
         CommandReplyType.COMMAND_NOT_SUPPORTED.code,
         0x00.toByte /*rsv*/,
         0x01 /*IPv4*/,
+        127,
         0,
         0,
-        0,
-        0,
-        (PORT_ZERO.value >> 8).toByte,
-        PORT_ZERO.value.toByte
+        1,
+        (serverAddress.port.value >> 8).toByte,
+        serverAddress.port.value.toByte
       )
     )
   }
 
   it should "throw UnsupportedCommandException and send COMMAND_NOT_SUPPORTED when no handler registered for requested command" in {
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
 
     val resolver = Resolver.default[IO]
 
@@ -344,38 +390,49 @@ class Socks5ServerConnectionHandlerSpec
     val host = Ipv4Address.fromString("127.0.0.1").value
     val port = 8080
 
+    val serverAddress = SocketAddress(ipv4"127.0.0.1", port"8080")
     val handler =
-      new Socks5ServerConnectionHandler[IO](authenticators, Map.empty, socketStub, resolver)
+      new Socks5ServerConnectionHandler[IO](
+        rwStub,
+        serverAddress,
+        resolver,
+        authenticators,
+        Map.empty
+      )
 
     val protocolVersion: Byte = 0x05
     val NMethods: Byte = 1
 
     for {
-      _ <- (socketStub.readN _).returnsIOOnCall {
-        case 1 => IO(Chunk[Byte](protocolVersion, NMethods))
-        case 2 => IO(Chunk[Byte](noAuthAuthenticator.code))
-        case 3 => IO(Chunk[Byte](protocolVersion, Command.CONNECT.code))
-        case 4 => IO(Chunk[Byte](0x0 /*rsv*/, 0x01 /*IPv4*/ ))
-        case 5 => IO(Chunk[Byte]((port >> 8).toByte, port.toByte))
+      _ <- rwStub.read2.returnsIOOnCall {
+        case 1 => IO((protocolVersion, NMethods))
+        case 2 => IO((protocolVersion, Command.CONNECT.code))
+        case 3 => IO((0x0 /*rsv*/, 0x01 /*IPv4*/ ))
+        case 4 => IO(((port >> 8).toByte, port.toByte))
       }
-      _ <- (socketStub.read _).returnsIOOnCall { case 1 => IO(Some(Chunk.array(host.toBytes))) }
-      _ <- (socketStub.write _).succeedsWith(())
+      _ <- (rwStub.readN _).returnsIOOnCall {
+        case 1 => IO(Chunk[Byte](noAuthAuthenticator.code))
+        case 2 => IO(Chunk.array(host.toBytes))
+      }
+      _ <- (rwStub.write _).succeedsWith(())
       _ <- handler.handle().assertThrows[UnsupportedCommandException]
-      calls <- (socketStub.write _).callsIO
+      calls <- (rwStub.write _).callsIO
     } yield calls shouldBe List(
-      Chunk[Byte](VERSION_SOCKS5_BYTE, noAuthAuthenticator.code),
+      Chunk[Byte](VERSION_SOCKS5, noAuthAuthenticator.code),
       Chunk[Byte](
         protocolVersion,
         CommandReplyType.COMMAND_NOT_SUPPORTED.code,
         0x00.toByte /*rsv*/,
         0x01 /*IPv4*/,
+        127,
         0,
         0,
-        0,
-        0,
-        (PORT_ZERO.value >> 8).toByte,
-        PORT_ZERO.value.toByte
+        1,
+        (serverAddress.port.value >> 8).toByte,
+        serverAddress.port.value.toByte
       )
     )
   }
+
+  // TODO добавить тесты с таймаутами
 }

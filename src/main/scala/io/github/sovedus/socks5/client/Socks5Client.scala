@@ -16,12 +16,15 @@
 
 package io.github.sovedus.socks5.client
 
+import io.github.sovedus.socks5.client.auth.ClientAuthenticator
+import io.github.sovedus.socks5.common.{ReadWriter, Resolver}
+
 import cats.effect.Async
 import cats.effect.kernel.Resource
 import cats.syntax.all.*
 
-import _root_.io.github.sovedus.socks5.client.auth.ClientAuthenticator
-import _root_.io.github.sovedus.socks5.common.Resolver
+import scala.concurrent.duration.FiniteDuration
+
 import com.comcast.ip4s.{Host, Port, SocketAddress}
 import fs2.*
 import fs2.io.net.{Network, Socket}
@@ -40,7 +43,8 @@ private[client] object Socks5Client {
       port: Port,
       authenticators: Map[Byte, ClientAuthenticator[F]],
       resolver: Resolver[F],
-      resolveHostOnServer: Boolean
+      resolveHostOnServer: Boolean,
+      idleTimeout: FiniteDuration
   ): Socks5Client[F] = new Socks5Client[F] {
     override def connect(targetHost: Host, targetPort: Port): Pipe[F, Byte, Byte] = {
       (in: Stream[F, Byte]) =>
@@ -54,7 +58,8 @@ private[client] object Socks5Client {
         targetPort: Port
     ): Resource[F, Pipe[F, Byte, Byte]] =
       createPipe(targetHost, targetPort) { socket =>
-        Socks5ClientConnectCommandHandler(socket, authenticators, resolver, resolveHostOnServer)
+        val rw = ReadWriter.fromSocket(socket, idleTimeout)
+        Socks5ClientConnectCommandHandler(rw, authenticators, resolver, resolveHostOnServer)
       }
 
     private def createPipe[H <: Socks5ClientCommandHandler[F]](

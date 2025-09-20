@@ -16,6 +16,8 @@
 
 package io.github.sovedus.socks5.server.credentials
 
+import io.github.sovedus.socks5.common.auth.UserPasswordCredential
+
 import cats.effect.IO
 import cats.effect.testing.scalatest.AsyncIOSpec
 

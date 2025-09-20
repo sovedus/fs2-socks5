@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-package io.github.sovedus.socks5.client.auth
+package io.github.sovedus.socks5.common
 
-import io.github.sovedus.socks5.common.ReadWriter
-import io.github.sovedus.socks5.common.auth.AuthenticationStatus
+import fs2.Chunk
 
-trait ClientAuthenticator[F[_]] {
-  def code: Byte
-  def authenticate(rw: ReadWriter[F]): F[AuthenticationStatus]
+trait Reader[F[_]] {
+  def reads: fs2.Stream[F, Byte]
+  def readN(n: Int): F[Chunk[Byte]]
+  def read1: F[Byte]
+  def read2: F[(Byte, Byte)]
+  def read4: F[(Byte, Byte, Byte, Byte)]
 }

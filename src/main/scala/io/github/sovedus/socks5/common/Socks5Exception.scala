@@ -16,25 +16,42 @@
 
 package io.github.sovedus.socks5.common
 
-sealed abstract class Socks5Exception(message: String = "")
-    extends Exception(message)
-    with Product
+import java.io.IOException
 
 object Socks5Exception {
 
-  case class ProtocolVersionException(version: Byte)
-      extends Socks5Exception(s"Version ($version) not support")
+  final case class ProtocolVersionException(version: Byte)
+      extends Exception(s"Version ($version) not support")
 
-  case class AuthenticationException(message: String) extends Socks5Exception(message)
+  final case class AuthenticationException(message: String) extends Exception(message)
 
-  case class UnsupportedCommandException(code: Byte)
-      extends Socks5Exception(s"Unsupported command: 0x${code.toInt.toHexString}")
+  final case class UnsupportedCommandException(code: Byte)
+      extends Exception(s"Unsupported command: 0x${code.toInt.toHexString}")
 
-  case class HandleCommandException(message: String) extends Socks5Exception(message)
+  final case class HandleCommandException(message: String) extends Exception(message)
 
-  case class UnsupportedAddressTypeException(addressType: Byte)
-      extends Socks5Exception(s"Unsupported address type: $addressType")
+  final case class UnsupportedAddressTypeException(addressType: Byte)
+      extends Exception(s"Unsupported address type: $addressType")
 
-  case object NoSupportedAuthMethodException
-      extends Socks5Exception("No supported authentication method")
+  final case object NoSupportedAuthMethodException
+      extends Exception("No supported authentication method")
+
+  final case class ReachedEndOfStream()
+      extends IOException("Reached end of stream while reading")
+
+  final case class IncompleteReadException(expected: Int, actual: Int)
+      extends IOException(
+        s"Incomplete data read from stream: expected $expected bytes, got $actual bytes"
+      )
+
+  final case class IPv4ParseException(bytes: Array[Byte])
+      extends IOException(
+        s"Failed to parse IPv4 address from bytes: ${bytes.map(b => f"$b%02x").mkString("[", " ", "]")}"
+      )
+
+  final case class IPv6ParseException(bytes: Array[Byte])
+      extends IOException(
+        s"Failed to parse IPv6 address from bytes: ${bytes.map(b => f"$b%02x").mkString("[", " ", "]")}"
+      )
+
 }

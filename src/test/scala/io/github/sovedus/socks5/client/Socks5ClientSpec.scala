@@ -22,8 +22,11 @@ import io.github.sovedus.socks5.common.CommandReplyType.*
 import io.github.sovedus.socks5.common.Socks5Exception.{
   AuthenticationException,
   HandleCommandException,
-  NoSupportedAuthMethodException
+  IncompleteReadException,
+  NoSupportedAuthMethodException,
+  ReachedEndOfStream
 }
+import io.github.sovedus.socks5.common.auth.UserPasswordCredential
 import io.github.sovedus.socks5.test.utils.{Command, Handshake}
 
 import cats.effect.IO
@@ -35,9 +38,8 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
 
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration.DurationInt
-
-import java.io.EOFException
 
 import com.comcast.ip4s.IpLiteralSyntax
 import fs2.Chunk
@@ -63,13 +65,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       case (serverAddress, serverStream) =>
         val client = Socks5ClientBuilder
           .default[IO]
+          .withIdleTimeout(200.millis)
           .withHost(serverAddress.host)
           .withPort(serverAddress.port)
           .build
 
         for {
-          clientFiber <- fs2
-            .Stream
+          clientFiber <- fs2.Stream
             .emit(Chunk.from(testDataReq))
             .unchunks
             .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -123,13 +125,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       case (serverAddress, serverStream) =>
         val client = Socks5ClientBuilder
           .default[IO]
+          .withIdleTimeout(200.millis)
           .withHost(serverAddress.host)
           .withPort(serverAddress.port)
           .build
 
         for {
-          clientFiber <- fs2
-            .Stream
+          clientFiber <- fs2.Stream
             .emit(Chunk.from(testDataReq))
             .unchunks
             .through(client.connect(host"example.local", port"443"))
@@ -183,13 +185,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       case (serverAddress, serverStream) =>
         val client = Socks5ClientBuilder
           .default[IO]
+          .withIdleTimeout(200.millis)
           .withHost(serverAddress.host)
           .withPort(serverAddress.port)
           .build
 
         for {
-          clientFiber <- fs2
-            .Stream
+          clientFiber <- fs2.Stream
             .emit(Chunk.from(testDataReq))
             .unchunks
             .through(client.connect(ipv6"2001:db8::1", port"443"))
@@ -253,18 +255,19 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       .serverResource(host"127.0.0.1".some)
       .use {
         case (serverAddress, serverStream) =>
-          val userPassAuthenticator = UserPasswordAuthenticator[IO](user, pass)
+          val credential = UserPasswordCredential(user, pass)
+          val userPassAuthenticator = UserPasswordAuthenticator[IO](credential)
 
           val client = Socks5ClientBuilder
             .default[IO]
+            .withIdleTimeout(200.millis)
             .withHost(serverAddress.host)
             .withPort(serverAddress.port)
             .withAuthenticator(userPassAuthenticator)
             .build
 
           for {
-            clientFiber <- fs2
-              .Stream
+            clientFiber <- fs2.Stream
               .emit(Chunk.from(testDataReq))
               .unchunks
               .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -319,13 +322,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       case (serverAddress, serverStream) =>
         val client = Socks5ClientBuilder
           .default[IO]
+          .withIdleTimeout(200.millis)
           .withHost(serverAddress.host)
           .withPort(serverAddress.port)
           .build
 
         for {
-          clientFiber <- fs2
-            .Stream
+          clientFiber <- fs2.Stream
             .emit(Chunk.from(testDataReq))
             .unchunks
             .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -346,11 +349,11 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
             .compile
             .drain
             .start
-          _ <- clientFiber
-            .join
+          _ <- clientFiber.join
             .flatMap(_.embedError)
             .assertThrowsWithMessage[NoSupportedAuthMethodException.type](
-              "No supported authentication method")
+              "No supported authentication method"
+            )
         } yield {}
     }
   }
@@ -383,13 +386,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
         case (serverAddress, serverStream) =>
           val client = Socks5ClientBuilder
             .default[IO]
+            .withIdleTimeout(200.millis)
             .withHost(serverAddress.host)
             .withPort(serverAddress.port)
             .build
 
           for {
-            clientFiber <- fs2
-              .Stream
+            clientFiber <- fs2.Stream
               .emit(Chunk.from(testDataReq))
               .unchunks
               .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -444,18 +447,19 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       .serverResource(host"127.0.0.1".some)
       .use {
         case (serverAddress, serverStream) =>
-          val userPassAuthenticator = UserPasswordAuthenticator[IO](user, pass)
+          val credential = UserPasswordCredential(user, pass)
+          val userPassAuthenticator = UserPasswordAuthenticator[IO](credential)
 
           val client = Socks5ClientBuilder
             .default[IO]
+            .withIdleTimeout(200.millis)
             .withHost(serverAddress.host)
             .withPort(serverAddress.port)
             .withAuthenticator(userPassAuthenticator)
             .build
 
           for {
-            clientFiber <- fs2
-              .Stream
+            clientFiber <- fs2.Stream
               .emit(Chunk.from(testDataReq))
               .unchunks
               .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -510,18 +514,19 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       .serverResource(host"127.0.0.1".some)
       .use {
         case (serverAddress, serverStream) =>
-          val userPassAuthenticator = UserPasswordAuthenticator[IO](user, pass)
+          val credential = UserPasswordCredential(user, pass)
+          val userPassAuthenticator = UserPasswordAuthenticator[IO](credential)
 
           val client = Socks5ClientBuilder
             .default[IO]
+            .withIdleTimeout(200.millis)
             .withHost(serverAddress.host)
             .withPort(serverAddress.port)
             .withAuthenticator(userPassAuthenticator)
             .build
 
           for {
-            clientFiber <- fs2
-              .Stream
+            clientFiber <- fs2.Stream
               .emit(Chunk.from(testDataReq))
               .unchunks
               .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -554,7 +559,8 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
           } yield {}
       }
       .assertThrowsWithMessage[IllegalArgumentException](
-        "Username and password cannot be empty")
+        "Username and password cannot be empty"
+      )
   }
 
   it should "throw exception when server sends malformed handshake response" in {
@@ -569,13 +575,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
         case (serverAddress, serverStream) =>
           val client = Socks5ClientBuilder
             .default[IO]
+            .withIdleTimeout(200.millis)
             .withHost(serverAddress.host)
             .withPort(serverAddress.port)
             .build
 
           for {
-            clientFiber <- fs2
-              .Stream
+            clientFiber <- fs2.Stream
               .emit(Chunk.from(testDataReq))
               .unchunks
               .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -602,18 +608,15 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
             _ <- clientFiber.join.flatMap(_.embedError)
           } yield {}
       }
-      .assertThrows[EOFException]
+      .assertThrows[IncompleteReadException]
   }
 
   it should "throw exception when server sends malformed CONNECT response" in {
-    // Некорректный формат ответа на CONNECT (не 10 байт)
     val handshakeReq = Handshake.Request.withoutAuthentication
     val handshakeResp = Handshake.Response.withoutAuthentication
 
     val commandReq = Command.Connect.Request.fromIpV4(ipv4"127.0.0.1", 443)
-    val malformedCommandResp = Command
-      .Connect
-      .Response
+    val malformedCommandResp = Command.Connect.Response
       .fromIpV4(CommandReplyType.SUCCEEDED, ipv4"127.0.0.1", 443)
       .take(5)
 
@@ -626,13 +629,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
         case (serverAddress, serverStream) =>
           val client = Socks5ClientBuilder
             .default[IO]
+            .withIdleTimeout(200.millis)
             .withHost(serverAddress.host)
             .withPort(serverAddress.port)
             .build
 
           for {
-            clientFiber <- fs2
-              .Stream
+            clientFiber <- fs2.Stream
               .emit(Chunk.from(testDataReq))
               .unchunks
               .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -664,7 +667,7 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
             receiveData <- clientFiber.join.flatMap(_.embedError)
           } yield receiveData should equal(testDataResp)
       }
-      .assertThrows[EOFException]
+      .assertThrows[IncompleteReadException]
   }
 
   it should "handle server closing connection unexpectedly during handshake" in {
@@ -678,13 +681,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
         case (serverAddress, serverStream) =>
           val client = Socks5ClientBuilder
             .default[IO]
+            .withIdleTimeout(200.millis)
             .withHost(serverAddress.host)
             .withPort(serverAddress.port)
             .build
 
           for {
-            clientFiber <- fs2
-              .Stream
+            clientFiber <- fs2.Stream
               .emit(Chunk.from(testDataReq))
               .unchunks
               .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -709,8 +712,7 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
             _ <- clientFiber.join.flatMap(_.embedError)
           } yield {}
       }
-      .assertThrowsWithMessage[EOFException](
-        "Handshake failed: remote peer closed connection before sending response")
+      .assertThrows[ReachedEndOfStream]
 
   }
 
@@ -728,13 +730,13 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
         case (serverAddress, serverStream) =>
           val client = Socks5ClientBuilder
             .default[IO]
+            .withIdleTimeout(200.millis)
             .withHost(serverAddress.host)
             .withPort(serverAddress.port)
             .build
 
           for {
-            clientFiber <- fs2
-              .Stream
+            clientFiber <- fs2.Stream
               .emit(Chunk.from(testDataReq))
               .unchunks
               .through(client.connect(ipv4"127.0.0.1", port"443"))
@@ -764,8 +766,55 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
             _ <- clientFiber.join.flatMap(_.embedError)
           } yield {}
       }
-      .assertThrowsWithMessage[EOFException](
-        "Unexpected end of stream while reading SOCKS5 reply")
+      .assertThrows[ReachedEndOfStream]
   }
 
+  it should "throw TimeoutException when server does not respond to handshake within timeout" in {
+    val handshakeReq = Handshake.Request.withoutAuthentication
+
+    val testDataReq = List[Byte](1, 2, 3, 4, 5)
+    val testDataResp = testDataReq.reverse
+
+    Network[IO]
+      .serverResource(host"127.0.0.1".some)
+      .use {
+        case (serverAddress, serverStream) =>
+          val client = Socks5ClientBuilder
+            .default[IO]
+            .withHost(serverAddress.host)
+            .withPort(serverAddress.port)
+            .withIdleTimeout(200.millis)
+            .build
+
+          for {
+            clientFiber <- fs2.Stream
+              .emit(Chunk.from(testDataReq))
+              .unchunks
+              .through(client.connect(ipv4"127.0.0.1", port"443"))
+              .compile
+              .toList
+              .start
+            signal <- SignallingRef[IO].of(false)
+            _ <- serverStream
+              .interruptWhen(signal)
+              .evalMap { serverSocket =>
+                for {
+                  _ <- serverSocket
+                    .readN(handshakeReq.length)
+                    .map(_.toList)
+                    .asserting(_ should equal(handshakeReq))
+                  _ <- IO.sleep(500.millis)
+                  _ <- signal.set(true)
+                } yield {}
+              }
+              .compile
+              .drain
+              .start
+            receiveData <- clientFiber.join.flatMap(_.embedError)
+          } yield receiveData should equal(testDataResp)
+      }
+      .assertThrows[TimeoutException]
+  }
+
+  // TODO добавить тесты с таймаутами
 }

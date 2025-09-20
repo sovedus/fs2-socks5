@@ -41,7 +41,8 @@ object Command {
           commandCode,
           reserved,
           domainAddressType,
-          domainLength) ++ domainBytes ++ portBytes
+          domainLength
+        ) ++ domainBytes ++ portBytes
       }
 
       def fromIpV4(ip: Ipv4Address, port: Int): List[Byte] = {
@@ -50,7 +51,8 @@ object Command {
           protocolVersion,
           commandCode,
           reserved,
-          ipv4AddressType) ++ ip.toBytes ++ portBytes
+          ipv4AddressType
+        ) ++ ip.toBytes ++ portBytes
       }
 
       def fromIpV6(ip: Ipv6Address, port: Int): List[Byte] = {
@@ -59,7 +61,8 @@ object Command {
           protocolVersion,
           commandCode,
           reserved,
-          ipv6AddressType) ++ ip.toBytes ++ portBytes
+          ipv6AddressType
+        ) ++ ip.toBytes ++ portBytes
       }
     }
 
@@ -75,7 +78,8 @@ object Command {
           replyType.code,
           reserved,
           domainAddressType,
-          domainLength) ++ domainBytes ++ portBytes
+          domainLength
+        ) ++ domainBytes ++ portBytes
       }
 
       def fromIpV4(replyType: CommandReplyType, ip: Ipv4Address, port: Int): List[Byte] = {
@@ -85,7 +89,8 @@ object Command {
           protocolVersion,
           replyType.code,
           reserved,
-          ipv4AddressType) ++ ip.toBytes ++ portBytes
+          ipv4AddressType
+        ) ++ ip.toBytes ++ portBytes
       }
 
       def fromIpV6(replyType: CommandReplyType, ip: Ipv6Address, port: Int): List[Byte] = {
@@ -95,7 +100,8 @@ object Command {
           protocolVersion,
           replyType.code,
           reserved,
-          ipv6AddressType) ++ ip.toBytes ++ portBytes
+          ipv6AddressType
+        ) ++ ip.toBytes ++ portBytes
       }
 
     }

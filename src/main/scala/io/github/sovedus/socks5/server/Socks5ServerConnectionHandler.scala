@@ -16,19 +16,9 @@
 
 package io.github.sovedus.socks5.server
 
-import io.github.sovedus.socks5.common.{
-  Command,
-  CommandReplyType,
-  Resolver,
-  Socks5AddressHelper
-}
+import io.github.sovedus.socks5.common.*
 import io.github.sovedus.socks5.common.Socks5Constants.*
-import io.github.sovedus.socks5.common.Socks5Exception.{
-  AuthenticationException,
-  NoSupportedAuthMethodException,
-  ProtocolVersionException,
-  UnsupportedCommandException
-}
+import io.github.sovedus.socks5.common.Socks5Exception.*
 import io.github.sovedus.socks5.common.auth.AuthenticationStatus
 import io.github.sovedus.socks5.server.auth.ServerAuthenticator
 
@@ -37,17 +27,16 @@ import cats.syntax.all.*
 
 import java.net.{ConnectException, UnknownHostException}
 
+import com.comcast.ip4s.{IpAddress, SocketAddress}
 import fs2.Chunk
-import fs2.io.net.Socket
 
-private[server] class Socks5ServerConnectionHandler[F[_]: Async](
-    private val authenticators: Map[Byte, ServerAuthenticator[F]],
-    private val commands: Map[Command, Socks5ServerCommandHandler[F]],
-    protected val socket: Socket[F],
-    protected val resolver: Resolver[F]
-) extends Socks5AddressHelper[F] {
-
-  protected val F: Async[F] = implicitly
+private[server] class Socks5ServerConnectionHandler[F[_]](
+    rw: ReadWriter[F],
+    serverAddress: SocketAddress[IpAddress],
+    resolver: Resolver[F],
+    authenticators: Map[Byte, ServerAuthenticator[F]],
+    commands: Map[Command, Socks5ServerCommandHandler[F]]
+)(implicit F: Async[F]) {
 
   def handle(): F[Unit] = {
     val f = for {
@@ -56,34 +45,50 @@ private[server] class Socks5ServerConnectionHandler[F[_]: Async](
       _ <- handleCommand()
     } yield {}
 
-    f.attemptT
-      .leftSemiflatTap {
-        case _: UnknownHostException =>
-          CommandReply(CommandReplyType.HOST_UNREACHABLE, IPv4_ZERO, PORT_ZERO).send(socket)
-        case _: ConnectException =>
-          CommandReply(CommandReplyType.CONNECTION_REFUSED, IPv4_ZERO, PORT_ZERO).send(socket)
-        case _: ProtocolVersionException =>
-          CommandReply(CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE, IPv4_ZERO, PORT_ZERO)
-            .send(socket)
-        case _: UnsupportedCommandException =>
-          CommandReply(CommandReplyType.COMMAND_NOT_SUPPORTED, IPv4_ZERO, PORT_ZERO).send(
-            socket)
-        case _: AuthenticationException => F.unit
-        case _ =>
-          CommandReply(CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE, IPv4_ZERO, PORT_ZERO)
-            .send(socket)
-      }
-      .rethrowT
+    f.attemptT.leftSemiflatTap {
+      case _: UnknownHostException =>
+        CommandReply(CommandReplyType.HOST_UNREACHABLE, serverAddress.host, serverAddress.port)
+          .send(rw)
+      case _: ConnectException =>
+        CommandReply(
+          CommandReplyType.CONNECTION_REFUSED,
+          serverAddress.host,
+          serverAddress.port
+        ).send(rw)
+      case _: ProtocolVersionException =>
+        CommandReply(
+          CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE,
+          serverAddress.host,
+          serverAddress.port
+        ).send(
+          rw
+        )
+      case _: UnsupportedCommandException =>
+        CommandReply(
+          CommandReplyType.COMMAND_NOT_SUPPORTED,
+          serverAddress.host,
+          serverAddress.port
+        ).send(rw)
+      case _: AuthenticationException => F.unit
+      case _ =>
+        CommandReply(
+          CommandReplyType.GENERAL_SOCKS_SERVER_FAILURE,
+          serverAddress.host,
+          serverAddress.port
+        ).send(
+          rw
+        )
+    }.rethrowT
   }
 
   private def handleHandshake(): F[Byte] = for {
-    bytes <- socket.readN(2).map(c => (c(0), c(1)))
-    (version, nMethods) = bytes
+    (version, nMethods) <- rw.read2
     _ = if (nMethods <= 0)
       throw new IllegalArgumentException(
-        s"Invalid number of authentication methods: $nMethods (must be positive)")
+        s"Invalid number of authentication methods: $nMethods (must be positive)"
+      )
     _ <- checkProtocolVersion(version)
-    methods <- socket.readN(nMethods.toInt).map(_.toArray)
+    methods <- rw.readN(nMethods.toInt).map(_.toArray)
     authMethod <- getFirstSuitableMethod(methods)
     _ <- sendSelectedAuthMethodReply(authMethod)
   } yield authMethod
@@ -92,9 +97,12 @@ private[server] class Socks5ServerConnectionHandler[F[_]: Async](
     authenticators
       .get(authMethod)
       .toOptionT
-      .semiflatMap(_.authenticate(socket))
-      .getOrRaise(new NoSuchElementException(
-        s"Unsupported authentication method: 0x${authMethod.toInt.toHexString}"))
+      .semiflatMap(_.authenticate(rw))
+      .getOrRaise(
+        new NoSuchElementException(
+          s"Unsupported authentication method: 0x${authMethod.toInt.toHexString}"
+        )
+      )
       .map(_ == AuthenticationStatus.SUCCESS)
       .ifM(F.unit, F.raiseError(AuthenticationException("User authentication failed")))
   }
@@ -104,25 +112,28 @@ private[server] class Socks5ServerConnectionHandler[F[_]: Async](
       .getOrElse(req.command, throw UnsupportedCommandException(req.command.code))
       .handle(req.address, req.port)
       .evalTap(_ =>
-        CommandReply(CommandReplyType.SUCCEEDED, req.address, req.port).send(socket))
-      .use { transferPipe =>
-        socket.reads.through(transferPipe).through(socket.writes).compile.drain
-      }
+        CommandReply(CommandReplyType.SUCCEEDED, serverAddress.host, serverAddress.port)
+          .send(rw)
+      )
+      .use { transferPipe => rw.reads.through(transferPipe).through(rw.writes).compile.drain }
   }
 
   private def sendSelectedAuthMethodReply(authMethod: Byte): F[Unit] =
-    socket.write(Chunk(VERSION_SOCKS5_BYTE, authMethod)) >>
+    rw.write(Chunk(VERSION_SOCKS5, authMethod)) >>
       F.raiseWhen(authMethod == NO_ACCEPTABLE_METHODS)(NoSupportedAuthMethodException)
 
   private def parseCommand(): F[CommandRequest] = for {
-    bytes <- socket.readN(2).map(c => (c(0), c(1)))
-    (version, cmd) = bytes
+    (version, cmd) <- rw.read2
     _ <- checkProtocolVersion(version)
     command = Command(cmd)
-    bytes <- socket.readN(2).map(c => (c(0), c(1)))
-    (_, addressType) = bytes
-    address <- parseAddress(addressType)
-    port <- parsePort()
+    (_, addressType) <- rw.read2
+    address <- addressType match {
+      case 0x01 => AddressUtils.readIPv4(rw)
+      case 0x03 => AddressUtils.readDomain(rw).flatMap(resolver.resolve)
+      case 0x04 => AddressUtils.readIPv6(rw)
+      case aType => F.raiseError(UnsupportedAddressTypeException(aType))
+    }
+    port <- AddressUtils.readPort(rw)
   } yield CommandRequest(command, address, port)
 
   private def getFirstSuitableMethod(authMethods: Array[Byte]): F[Byte] =

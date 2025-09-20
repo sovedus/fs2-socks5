@@ -16,30 +16,26 @@
 
 package io.github.sovedus.socks5.client.auth
 
+import io.github.sovedus.socks5.client.auth.UserPasswordAuthenticator.AUTH_VERSION
+import io.github.sovedus.socks5.common.ReadWriter
 import io.github.sovedus.socks5.common.Socks5Exception.AuthenticationException
-import io.github.sovedus.socks5.common.auth.AuthenticationStatus
+import io.github.sovedus.socks5.common.auth.{AuthenticationStatus, UserPasswordCredential}
 
-import cats.effect.Async
+import cats.effect.{Async, Sync}
 import cats.syntax.all.*
 
 import scala.collection.mutable.ArrayBuffer
 
 import fs2.Chunk
-import fs2.io.net.Socket
 
-import UserPasswordAuthenticator.AUTH_VERSION
-
-class UserPasswordAuthenticator[F[_]: Async](authData: Chunk[Byte])
+class UserPasswordAuthenticator[F[_]](authData: Chunk[Byte])(implicit F: Sync[F])
     extends ClientAuthenticator[F] {
-
-  private val F: Async[F] = implicitly
 
   override def code: Byte = 0x02
 
-  override def authenticate(socket: Socket[F]): F[AuthenticationStatus] = for {
-    _ <- socket.write(authData)
-    bytes <- socket.readN(2).map(c => (c(0), c(1)))
-    (version, authStatus) = bytes
+  override def authenticate(rw: ReadWriter[F]): F[AuthenticationStatus] = for {
+    _ <- rw.write(authData)
+    (version, authStatus) <- rw.read2
     _ <- F
       .raiseError(AuthenticationException(s"Unsupported auth version: $version"))
       .whenA(version != AUTH_VERSION)
@@ -53,27 +49,15 @@ class UserPasswordAuthenticator[F[_]: Async](authData: Chunk[Byte])
 object UserPasswordAuthenticator {
   private val AUTH_VERSION: Byte = 0x01
 
-  def apply[F[_]: Async](user: String, password: String): UserPasswordAuthenticator[F] = {
-    val userBytes = user.getBytes
-    val passwordBytes = password.getBytes
-
-    if (userBytes.isEmpty && passwordBytes.isEmpty)
-      throw new IllegalArgumentException("Username and password cannot be empty")
-    if (userBytes.length < 1) throw new IllegalArgumentException("Username cannot be empty")
-    else if (userBytes.length > 255)
-      throw new IllegalArgumentException("Username is too long")
-    else if (passwordBytes.length < 1)
-      throw new IllegalArgumentException("Password cannot be empty")
-    else if (passwordBytes.length > 255)
-      throw new IllegalArgumentException("Password is too long")
-
-    new UserPasswordAuthenticator(makeAuthData(userBytes, passwordBytes))
+  def apply[F[_]: Async](credential: UserPasswordCredential): UserPasswordAuthenticator[F] = {
+    new UserPasswordAuthenticator(makeAuthData(credential))
   }
 
   private def makeAuthData(
-      userBytes: Array[Byte],
-      passwordBytes: Array[Byte]
+      credential: UserPasswordCredential
   ): Chunk[Byte] = {
+    val userBytes = credential.user.getBytes
+    val passwordBytes = credential.password.getBytes
     val buf = new ArrayBuffer[Byte](3 + userBytes.length + passwordBytes.length)
 
     buf.addOne(AUTH_VERSION)
