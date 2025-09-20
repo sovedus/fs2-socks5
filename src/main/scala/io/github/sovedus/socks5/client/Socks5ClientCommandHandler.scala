@@ -17,34 +17,25 @@
 package io.github.sovedus.socks5.client
 
 import io.github.sovedus.socks5.client.auth.ClientAuthenticator
-import io.github.sovedus.socks5.common.{
-  Command,
-  CommandReplyType,
-  Resolver,
-  Socks5AddressHelper
-}
-import io.github.sovedus.socks5.common.Socks5Constants.VERSION_SOCKS5_BYTE
+import io.github.sovedus.socks5.common.*
+import io.github.sovedus.socks5.common.Socks5Constants.VERSION_SOCKS5
 import io.github.sovedus.socks5.common.Socks5Exception.*
 import io.github.sovedus.socks5.common.auth.AuthenticationStatus
 
-import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all.*
 
 import scala.collection.mutable.ArrayBuffer
 
-import java.io.EOFException
-
 import com.comcast.ip4s.*
 import fs2.Chunk
-import fs2.io.net.Socket
 
-private[client] abstract class Socks5ClientCommandHandler[F[_]: Sync]
-    extends Socks5AddressHelper[F] {
-
+private[client] abstract class Socks5ClientCommandHandler[F[_]: Sync] {
   private type AuthMethod = Byte
 
-  protected val socket: Socket[F]
+  private val F: Sync[F] = implicitly
+
+  protected val rw: ReadWriter[F]
   protected val authenticators: Map[AuthMethod, ClientAuthenticator[F]]
   protected val authMethods: Array[AuthMethod]
   protected val resolver: Resolver[F]
@@ -60,25 +51,15 @@ private[client] abstract class Socks5ClientCommandHandler[F[_]: Sync]
 
   private def handleHandshake(): F[Byte] = for {
     _ <- sendHandshakeRequest()
-    bytes <- OptionT(socket.read(2))
-      .getOrRaise(new EOFException(
-        "Handshake failed: remote peer closed connection before sending response"))
-      .flatTap(c =>
-        F.raiseWhen(c.size != 2)(
-          new EOFException(
-            "Incomplete handshake response. Expected 2 bytes (version + auth method), " +
-              s"but received only ${c.size} bytes"
-          )))
-      .map(c => (c(0), c(1)))
-    (version, authMethod) = bytes
+    (version, authMethod) <- rw.read2
     _ <- checkProtocolVersion(version)
   } yield authMethod
 
-  private def handleAuthentication(authMethod: Byte): F[Unit] = F.defer {
+  private def handleAuthentication(authMethod: Byte): F[Unit] = Sync[F].defer {
     authenticators
       .get(authMethod)
       .toOptionT
-      .semiflatMap(_.authenticate(socket))
+      .semiflatMap(_.authenticate(rw))
       .getOrRaise(NoSupportedAuthMethodException)
       .map(_ == AuthenticationStatus.SUCCESS)
       .ifM(F.unit, F.raiseError(AuthenticationException("User authentication failed")))
@@ -87,11 +68,11 @@ private[client] abstract class Socks5ClientCommandHandler[F[_]: Sync]
   private def sendHandshakeRequest(): F[Unit] = F.defer {
     val buf = new ArrayBuffer[Byte](2 + authMethods.length)
 
-    buf.addOne(VERSION_SOCKS5_BYTE)
+    buf.addOne(VERSION_SOCKS5)
     buf.addOne(authMethods.length.toByte)
     buf.addAll(authMethods)
 
-    socket.write(Chunk.array(buf.toArray))
+    rw.write(Chunk.array(buf.toArray))
   }
 
   protected def sendCommandRequest(command: Command, host: Host, port: Port): F[Unit] =
@@ -112,21 +93,21 @@ private[client] abstract class Socks5ClientCommandHandler[F[_]: Sync]
 
       val buf = new ArrayBuffer[Byte](6 + sizeAddressByte + addressSize)
 
-      buf.addOne(VERSION_SOCKS5_BYTE)
+      buf.addOne(VERSION_SOCKS5)
       buf.addOne(command.code)
       buf.addOne(0x00)
-      buf.addOne(getAddressType(host))
+      buf.addOne(AddressUtils.getAddressType(host))
 
       if (variableAddress) { buf.addOne(addressSize.toByte) }
 
       buf.addAll(addressBytes)
       buf.addAll(portBytes)
 
-      socket.write(Chunk.array(buf.toArray))
+      rw.write(Chunk.array(buf.toArray))
     }
 
   protected def checkProtocolVersion(version: Byte): F[Unit] =
-    F.raiseError(ProtocolVersionException(version)).whenA(version != VERSION_SOCKS5_BYTE)
+    F.raiseError(ProtocolVersionException(version)).whenA(version != VERSION_SOCKS5)
 
   protected def checkReplyCode(replyCode: Byte): F[Unit] =
     CommandReplyType.from(replyCode) match {

@@ -16,17 +16,16 @@
 
 package io.github.sovedus.socks5.server.auth
 
+import io.github.sovedus.socks5.common.ReadWriter
 import io.github.sovedus.socks5.common.auth.AuthenticationStatus
 
 import cats.effect.Async
-
-import fs2.io.net.Socket
 
 class NoAuthAuthenticator[F[_]: Async] extends ServerAuthenticator[F] {
 
   override def code: Byte = 0x00
 
-  override def authenticate(socket: Socket[F]): F[AuthenticationStatus] =
+  override def authenticate(rw: ReadWriter[F]): F[AuthenticationStatus] =
     Async[F].pure(AuthenticationStatus.SUCCESS)
 }
 

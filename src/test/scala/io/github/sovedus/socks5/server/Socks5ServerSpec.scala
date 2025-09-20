@@ -22,16 +22,20 @@ import io.github.sovedus.socks5.test.utils.Handshake
 import cats.effect.{IO, Resource}
 import cats.effect.testing.scalatest.AsyncIOSpec
 
+import org.scalatest.OptionValues
 import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.NoOpFactory
 
+import scala.concurrent.TimeoutException
+import scala.concurrent.duration.DurationInt
+
 import com.comcast.ip4s.{IpAddress, IpLiteralSyntax, Port, SocketAddress}
-import fs2.{Chunk, Pipe}
+import fs2.{Chunk, CompositeFailure, Pipe}
 import fs2.io.net.Network
 
-class Socks5ServerSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
+class Socks5ServerSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers with OptionValues {
   private implicit val loggerFactory: LoggerFactory[IO] = NoOpFactory[IO]
 
   "Socks5Server" should "respond with NO_ACCEPTABLE_METHODS when client requests unsupported authentication method" in {
@@ -40,8 +44,8 @@ class Socks5ServerSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
 
     Socks5ServerBuilder
       .default[IO]
+      .withIdleTimeout(200.millis)
       .withHost(host"localhost")
-      .withPort(port"0")
       .withAuthenticator(NoAuthAuthenticator())
       .withErrorHandler(ErrorHandler.noop)
       .build
@@ -60,18 +64,18 @@ class Socks5ServerSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
     val handshakeResp = List[Byte](5, 0)
 
     val commandReq = List[Byte](5, 1, 0, 1, 127, 0, 0, 1, 1, -69)
-    val commandResp = List[Byte](5, 0, 0, 1, 127, 0, 0, 1, 1, -69)
+    val commandRespWithoutPort = List[Byte](5, 0, 0, 1, 127, 0, 0, 1)
 
     val testDataReq = List[Byte](1, 2, 3, 4, 5)
-    val testDataResp = testDataReq.reverse
+    val testDataResp = testDataReq.map(_ + 1).map(_.toByte)
 
     Socks5ServerBuilder
       .default[IO]
+      .withIdleTimeout(200.millis)
       .withHost(host"localhost")
-      .withPort(port"0")
       .withAuthenticator(NoAuthAuthenticator())
       .withErrorHandler(ErrorHandler.noop)
-      .withConnectionHandler(commandHandler(testDataResp))
+      .withConnectionHandler(commandHandler())
       .build
       .use { server =>
         Network[IO].client(SocketAddress(server.host, server.port)).use { clientSocket =>
@@ -79,6 +83,10 @@ class Socks5ServerSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
             _ <- clientSocket.write(Chunk.from(handshakeReq))
             _ <- clientSocket.readN(2).map(_.toList).asserting(_ should equal(handshakeResp))
             _ <- clientSocket.write(Chunk.from(commandReq))
+            commandResp = commandRespWithoutPort ++ List(
+              (server.port.value >> 8).toByte,
+              server.port.value.toByte
+            )
             _ <- clientSocket.readN(10).map(_.toList).asserting(_ should equal(commandResp))
             _ <- clientSocket.write(Chunk.from(testDataReq))
             _ <- clientSocket
@@ -90,15 +98,61 @@ class Socks5ServerSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       }
   }
 
-  private def commandHandler(sendData: List[Byte]): Socks5ServerCommandHandler[IO] =
+  it should "throw TimeoutException when client does not send data for longer than idle timeout" in {
+    val handshakeReq = List[Byte](5, 1, 0)
+    val handshakeResp = List[Byte](5, 0)
+
+    val commandReq = List[Byte](5, 1, 0, 1, 127, 0, 0, 1, 1, -69)
+    val commandRespWithoutPort = List[Byte](5, 0, 0, 1, 127, 0, 0, 1)
+
+    val testDataReqPart1 = List[Byte](1, 2, 3)
+
+    val res = for {
+      error <- Resource.eval(IO.deferred[Throwable])
+      server <- Socks5ServerBuilder
+        .default[IO]
+        .withIdleTimeout(200.millis)
+        .withHost(host"localhost")
+        .withAuthenticator(NoAuthAuthenticator())
+        .withErrorHandler(ex => error.complete(ex).void)
+        .withConnectionHandler(commandHandler())
+        .build
+      clientSocket <- Network[IO].client(SocketAddress(server.host, server.port))
+    } yield (server, clientSocket, error)
+
+    res.use {
+      case (server, clientSocket, error) =>
+        for {
+          _ <- clientSocket.write(Chunk.from(handshakeReq))
+          _ <- clientSocket.readN(2).map(_.toList).asserting(_ should equal(handshakeResp))
+          _ <- clientSocket.write(Chunk.from(commandReq))
+          commandResp = commandRespWithoutPort ++ List(
+            (server.port.value >> 8).toByte,
+            server.port.value.toByte
+          )
+          _ <- clientSocket.readN(10).map(_.toList).asserting(_ should equal(commandResp))
+          _ <- clientSocket.write(Chunk.from(testDataReqPart1))
+          _ <- IO.sleep(500.millis)
+          err <- error.tryGet
+        } yield err.value match {
+          case _: TimeoutException => succeed
+          case ex: CompositeFailure if ex.all.forall(_.isInstanceOf[TimeoutException]) =>
+            succeed
+          case ex => fail(ex)
+        }
+    }
+  }
+
+  private def commandHandler(): Socks5ServerCommandHandler[IO] =
     new Socks5ServerCommandHandler[IO] {
       override def handle(
           targetIp: IpAddress,
           targetPort: Port
-      ): Resource[IO, Pipe[IO, Byte, Byte]] =
-        Resource
-          .pure(fs2.Stream.emits(sendData).covary[IO])
-          .map(stream => in => stream.concurrently(in.delete(_ => true)))
+      ): Resource[IO, Pipe[IO, Byte, Byte]] = {
+        val pipe: fs2.Pipe[IO, Byte, Byte] = _.map(b => (b + 1).toByte)
+
+        Resource.pure(pipe)
+      }
     }
 
 }

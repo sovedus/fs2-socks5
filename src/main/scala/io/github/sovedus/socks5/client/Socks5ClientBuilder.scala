@@ -23,6 +23,8 @@ import cats.effect.Async
 
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
+
 import com.comcast.ip4s.*
 import fs2.io.net.Network
 
@@ -32,7 +34,8 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
     val resolveHostOnServer: Boolean,
     private val authenticators: Map[Byte, ClientAuthenticator[F]],
     private val resolver: Resolver[F],
-    private val logger: Logger[F]
+    private val logger: Logger[F],
+    private val idleTimeout: FiniteDuration
 ) {
   private lazy val noAuthAuthenticator = NoAuthAuthenticator()
 
@@ -49,12 +52,22 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
 
   def withLogger(logger: Logger[F]): Socks5ClientBuilder[F] = copy(logger = logger)
 
+  def withIdleTimeout(timeout: FiniteDuration): Socks5ClientBuilder[F] =
+    copy(idleTimeout = timeout)
+
   def build: Socks5Client[F] = {
     val nonEmptyAuthenticators =
       if (authenticators.isEmpty) Map(noAuthAuthenticator.code -> noAuthAuthenticator)
       else authenticators
 
-    Socks5Client.create(host, port, nonEmptyAuthenticators, resolver, resolveHostOnServer)
+    Socks5Client.create(
+      host,
+      port,
+      nonEmptyAuthenticators,
+      resolver,
+      resolveHostOnServer,
+      idleTimeout
+    )
   }
 
   private def copy(
@@ -63,14 +76,16 @@ final class Socks5ClientBuilder[F[_]: Async: Network] private (
       resolveHostOnServer: Boolean = this.resolveHostOnServer,
       authenticators: Map[Byte, ClientAuthenticator[F]] = this.authenticators,
       resolver: Resolver[F] = this.resolver,
-      logger: Logger[F] = this.logger
+      logger: Logger[F] = this.logger,
+      idleTimeout: FiniteDuration = this.idleTimeout
   ): Socks5ClientBuilder[F] = new Socks5ClientBuilder(
     host = host,
     port = port,
     resolveHostOnServer = resolveHostOnServer,
     authenticators = authenticators,
     resolver = resolver,
-    logger = logger
+    logger = logger,
+    idleTimeout = idleTimeout
   )
 }
 
@@ -83,6 +98,7 @@ object Socks5ClientBuilder {
       resolveHostOnServer = true,
       authenticators = Map.empty,
       resolver = Resolver.default,
-      logger = LoggerFactory[F].getLoggerFromClass(Socks5Client.getClass)
+      logger = LoggerFactory[F].getLoggerFromClass(Socks5Client.getClass),
+      idleTimeout = 60.seconds
     )
 }

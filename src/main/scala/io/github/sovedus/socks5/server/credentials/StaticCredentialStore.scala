@@ -16,6 +16,8 @@
 
 package io.github.sovedus.socks5.server.credentials
 
+import io.github.sovedus.socks5.common.auth.UserPasswordCredential
+
 import cats.effect.Sync
 
 final class StaticCredentialStore[F[_]: Sync](users: Map[String, String])

@@ -17,28 +17,25 @@
 package io.github.sovedus.socks5.client
 
 import io.github.sovedus.socks5.client.auth.ClientAuthenticator
+import io.github.sovedus.socks5.common.{AddressUtils, ReadWriter, Resolver}
 import io.github.sovedus.socks5.common.Command.CONNECT
-import io.github.sovedus.socks5.common.Resolver
+import io.github.sovedus.socks5.common.Socks5Exception.UnsupportedAddressTypeException
 
-import cats.data.OptionT
 import cats.effect.Async
 import cats.syntax.all.*
 
-import java.io.EOFException
-
 import com.comcast.ip4s.*
 import fs2.Pipe
-import fs2.io.net.Socket
 
 private[client] class Socks5ClientConnectCommandHandler[F[_]: Async](
-    val socket: Socket[F],
-    val authenticators: Map[Byte, ClientAuthenticator[F]],
-    val authMethods: Array[Byte],
-    val resolver: Resolver[F],
-    val resolveHostOnServer: Boolean
+    protected val rw: ReadWriter[F],
+    protected val authenticators: Map[Byte, ClientAuthenticator[F]],
+    protected val authMethods: Array[Byte],
+    protected val resolver: Resolver[F],
+    protected val resolveHostOnServer: Boolean
 ) extends Socks5ClientCommandHandler[F] {
 
-  override protected val F: Async[F] = implicitly
+  private val F: Async[F] = implicitly
 
   override protected def handleCommand(
       targetHost: Host,
@@ -50,24 +47,22 @@ private[client] class Socks5ClientConnectCommandHandler[F[_]: Async](
   } yield pipe
 
   private def parseCommandReply(): F[fs2.Pipe[F, Byte, Byte]] = for {
-    bytes <- OptionT(socket.read(4))
-      .getOrRaise(new EOFException("Unexpected end of stream while reading SOCKS5 reply"))
-      .flatTap(c =>
-        F.raiseWhen(c.size != 4)(
-          new EOFException("Incomplete command reply from SOCKS5 server")))
-      .map(c => (c(0), c(1), c(2), c(3)))
-    (version, replyCode, _, addressType) = bytes
+    (version, replyCode, _, addressType) <- rw.read4
     _ <- checkProtocolVersion(version)
     _ <- checkReplyCode(replyCode)
-    _ <- parseAddress(addressType)
-    _ <- parsePort()
-  } yield { (in: fs2.Stream[F, Byte]) => socket.reads.concurrently(in.through(socket.writes)) }
+    _ <- addressType match {
+      case 0x01 => AddressUtils.readIPv4(rw)
+      case 0x04 => AddressUtils.readIPv6(rw)
+      case aType => F.raiseError(UnsupportedAddressTypeException(aType))
+    }
+    _ <- AddressUtils.readPort(rw)
+  } yield { (in: fs2.Stream[F, Byte]) => rw.reads.concurrently(in.through(rw.writes)) }
 
 }
 
 private[client] object Socks5ClientConnectCommandHandler {
   def apply[F[_]: Async](
-      socket: Socket[F],
+      readWriter: ReadWriter[F],
       authenticators: Map[Byte, ClientAuthenticator[F]],
       resolver: Resolver[F],
       resolveHostOnServer: Boolean
@@ -75,9 +70,11 @@ private[client] object Socks5ClientConnectCommandHandler {
     .delay(authenticators.view.keys.toArray)
     .map(authMethods =>
       new Socks5ClientConnectCommandHandler(
-        socket,
+        readWriter,
         authenticators,
         authMethods,
         resolver,
-        resolveHostOnServer))
+        resolveHostOnServer
+      )
+    )
 }
