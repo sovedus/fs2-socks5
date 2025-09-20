@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
-package io.github.sovedus.socks5.server.credentials
+package io.github.sovedus.socks5.common
 
-case class UserPasswordCredential(user: String, password: String)
+import fs2.Chunk
+
+trait Writer[F[_]] {
+  def writes: fs2.Pipe[F, Byte, Nothing]
+  def write(chunk: Chunk[Byte]): F[Unit]
+}

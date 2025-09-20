@@ -16,9 +16,10 @@
 
 package io.github.sovedus.socks5.server.auth
 
+import io.github.sovedus.socks5.common.ReadWriter
 import io.github.sovedus.socks5.common.Socks5Exception.AuthenticationException
-import io.github.sovedus.socks5.common.auth.AuthenticationStatus
-import io.github.sovedus.socks5.server.credentials.{CredentialStore, UserPasswordCredential}
+import io.github.sovedus.socks5.common.auth.{AuthenticationStatus, UserPasswordCredential}
+import io.github.sovedus.socks5.server.credentials.CredentialStore
 
 import cats.effect.IO
 import cats.effect.testing.scalatest.AsyncIOSpec
@@ -28,7 +29,6 @@ import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import fs2.Chunk
-import fs2.io.net.Socket
 
 class UserPasswordAuthenticatorSpec
     extends AsyncFlatSpec
@@ -38,7 +38,7 @@ class UserPasswordAuthenticatorSpec
 
   "UserPasswordAuthenticator" should "successfully authenticate and send SUCCESS response according to RFC 1929" in {
     val credentialStoreStub = stub[CredentialStore[IO, UserPasswordCredential]]
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
 
     val authenticator = UserPasswordAuthenticator(credentialStoreStub)
 
@@ -48,25 +48,24 @@ class UserPasswordAuthenticatorSpec
     val password = "test"
 
     for {
-      _ <- (socketStub.readN _).returnsIOOnCall {
-        case 1 => IO(Chunk[Byte](authenticateVersion, username.length.toByte))
-        case 2 => IO(Chunk.array(username.getBytes))
-        case 3 => IO(Chunk[Byte](password.length.toByte))
-        case 4 => IO(Chunk.array(password.getBytes))
+      _ <- rwStub.read2.succeedsWith((authenticateVersion, username.length.toByte))
+      _ <- rwStub.read1.succeedsWith(password.length.toByte)
+      _ <- (rwStub.readN _).returnsIOOnCall {
+        case 1 => IO(Chunk.array(username.getBytes))
+        case 2 => IO(Chunk.array(password.getBytes))
       }
       _ <- (credentialStoreStub.validate _).succeedsWith(true)
-      _ <- (socketStub.write _).succeedsWith(())
-      _ <- authenticator
-        .authenticate(socketStub)
-        .asserting(_ shouldBe AuthenticationStatus.SUCCESS)
-      calls <- (socketStub.write _).callsIO
+      _ <- (rwStub.write _).succeedsWith(())
+      _ <- authenticator.authenticate(rwStub).asserting(_ shouldBe AuthenticationStatus.SUCCESS)
+      calls <- (rwStub.write _).callsIO
     } yield calls shouldBe List(
-      Chunk[Byte](authenticateVersion, AuthenticationStatus.SUCCESS.toByte))
+      Chunk[Byte](authenticateVersion, AuthenticationStatus.SUCCESS.toByte)
+    )
   }
 
   it should "throw AuthenticationException for unsupported authentication protocol version" in {
     val credentialStoreStub = stub[CredentialStore[IO, UserPasswordCredential]]
-    val socketStub = stub[Socket[IO]]
+    val rwStub = stub[ReadWriter[IO]]
 
     val authenticator = UserPasswordAuthenticator(credentialStoreStub)
 
@@ -75,10 +74,8 @@ class UserPasswordAuthenticatorSpec
     val username = "test"
 
     for {
-      _ <- (socketStub.readN _).returnsIOOnCall {
-        case 1 => IO(Chunk[Byte](badAuthenticateVersion, username.length.toByte))
-      }
-      _ <- authenticator.authenticate(socketStub).assertThrows[AuthenticationException]
+      _ <- rwStub.read2.succeedsWith((badAuthenticateVersion, username.length.toByte))
+      _ <- authenticator.authenticate(rwStub).assertThrows[AuthenticationException]
     } yield {}
   }
 }

@@ -16,12 +16,14 @@
 
 package io.github.sovedus.socks5.server
 
-import io.github.sovedus.socks5.common.{Command, Resolver}
+import io.github.sovedus.socks5.common.{Command, ReadWriter, Resolver}
 import io.github.sovedus.socks5.server.auth.ServerAuthenticator
 
 import cats.effect.{Async, Resource}
 import cats.effect.syntax.all.*
 import cats.syntax.all.*
+
+import scala.concurrent.duration.FiniteDuration
 
 import com.comcast.ip4s.{Host, Port}
 import fs2.io.net.Network
@@ -35,27 +37,34 @@ class Socks5Server[F[_]] private (
 object Socks5Server {
 
   private[server] def createAndStart[F[_]: Async: Network](
-      host: Host,
-      port: Port,
+      host: Option[Host],
+      port: Option[Port],
       authenticators: Map[Byte, ServerAuthenticator[F]],
       resolver: Resolver[F],
       limitConnections: Int,
       errorHandler: ErrorHandler[F],
-      commands: Map[Command, Socks5ServerCommandHandler[F]]
+      commands: Map[Command, Socks5ServerCommandHandler[F]],
+      idleTimeout: FiniteDuration
   ): Resource[F, Socks5Server[F]] =
     for {
-      server <- Network[F].serverResource(host.some, port.some)
+      server <- Network[F].serverResource(host, port)
       (serverAddress, serverSockets) = server
       _ <- serverSockets
         .map { clientSocket =>
-          fs2
-            .Stream
-            .eval(
-              new Socks5ServerConnectionHandler(
-                authenticators,
-                commands,
-                clientSocket,
-                resolver).handle().handleErrorWith(errorHandler.handleException).voidError)
+          val readWriter = ReadWriter.fromSocket(clientSocket, idleTimeout)
+          val handler =
+            new Socks5ServerConnectionHandler(
+              readWriter,
+              serverAddress,
+              resolver,
+              authenticators,
+              commands
+            )
+
+          fs2.Stream
+            .eval(handler.handle())
+            .handleErrorWith(ex => fs2.Stream.eval(errorHandler.handleException(ex)))
+            .voidError
         }
         .parJoin(limitConnections)
         .compile

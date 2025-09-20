@@ -66,8 +66,7 @@ class Socks5ServerConnectCommandHandlerSpec
             .compile
             .drain
             .start
-          _ <- fs2
-            .Stream
+          _ <- fs2.Stream
             .emit(clientData)
             .covary[IO]
             .through(fs2.text.utf8.encode)
