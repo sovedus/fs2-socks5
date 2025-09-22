@@ -815,6 +815,4 @@ class Socks5ClientSpec extends AsyncFlatSpec with AsyncIOSpec with Matchers {
       }
       .assertThrows[TimeoutException]
   }
-
-  // TODO добавить тесты с таймаутами
 }

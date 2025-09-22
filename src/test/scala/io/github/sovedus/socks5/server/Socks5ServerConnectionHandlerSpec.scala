@@ -433,6 +433,4 @@ class Socks5ServerConnectionHandlerSpec
       )
     )
   }
-
-  // TODO добавить тесты с таймаутами
 }
