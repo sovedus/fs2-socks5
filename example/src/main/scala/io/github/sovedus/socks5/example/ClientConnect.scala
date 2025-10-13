@@ -32,8 +32,7 @@ object ClientConnect extends IOApp.Simple {
     for {
       signal <- SignallingRef[IO].of(false)
       _ <- (IO.sleep(2.seconds) >> signal.set(true)).start
-      _ <- fs2
-        .Stream
+      _ <- fs2.Stream
         .emit(httpRawReq)
         .through(fs2.text.utf8.encode)
         .through(client.connect(host"echo.free.beeceptor.com", port"80"))
