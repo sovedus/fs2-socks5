@@ -66,8 +66,8 @@ lazy val root = project
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.typelevel" %% "cats-effect-testing-scalatest" % "1.7.0" % Test,
       "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % Test,
-      "org.scalamock" %% "scalamock" % "7.5.0" % Test,
-      "org.scalamock" %% "scalamock-cats-effect" % "7.5.0" % Test
+      "org.scalamock" %% "scalamock" % "7.5.1" % Test,
+      "org.scalamock" %% "scalamock-cats-effect" % "7.5.1" % Test
     )
   )
 
