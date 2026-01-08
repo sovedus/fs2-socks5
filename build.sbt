@@ -62,7 +62,7 @@ lazy val root = project
       "co.fs2" %%% "fs2-io" % "3.12.2",
       "org.typelevel" %% "log4cats-core" % log4catsVersion,
       "org.typelevel" %% "log4cats-slf4j" % log4catsVersion % Test,
-      "ch.qos.logback" % "logback-classic" % "1.5.18" % Test,
+      "ch.qos.logback" % "logback-classic" % "1.5.24" % Test,
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.typelevel" %% "cats-effect-testing-scalatest" % "1.7.0" % Test,
       "org.scalatestplus" %% "scalacheck-1-18" % "3.2.19.0" % Test,
